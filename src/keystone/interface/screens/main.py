@@ -16,7 +16,7 @@ from textual.binding import Binding
 from textual.command import DiscoveryHit, Hit, Hits, Provider
 from textual.containers import Horizontal
 from textual.screen import Screen
-from textual.widgets import DataTable, Footer, ListView, Static
+from textual.widgets import DataTable, Footer, Input, ListView, Static
 
 from ...application import OnboardingService, WorkspaceService
 from ...domain import StoreError
@@ -28,7 +28,7 @@ from ..modals import (
     ScopeFormModal,
     SecretFormModal,
 )
-from ..widgets import DetailPane, ScopesPane, SecretsPane
+from ..widgets import DetailPane, ScopeRow, ScopesPane, SecretsPane
 from .login import ConnectResult, LoginScreen
 
 
@@ -69,7 +69,9 @@ class MainScreen(Screen[None]):
         Binding("r", "refresh_scope", "Refresh"),
         Binding("R", "refresh_workspace", "Refresh all", show=False),
         Binding("a", "auth", "Auth"),
+        Binding("slash", "filter", "Filter"),
         Binding("question_mark", "help", "Help"),
+        Binding("escape", "cancel_filter", "Clear filter", show=False),
         # navigation — vim + arrows, fully keyboard driven
         Binding("tab,right,l", "focus_pane('right')", "Pane →", show=False),
         Binding("shift+tab,left,h", "focus_pane('left')", "Pane ←", show=False),
@@ -91,16 +93,19 @@ class MainScreen(Screen[None]):
         self._revealed: tuple[str, str] | None = None
         self._status_text: str = ""
         self._status_dot: tuple[str, str] = ("●", "$success")
+        self._filter_target: str | None = None  # "scopes" | "secrets" while filtering
 
     # ── layout ─────────────────────────────────────────────────────────
     def compose(self) -> ComposeResult:
         with Horizontal(id="banner"):
             yield Static("⏢ KEYSTONE", id="brand")
+            yield Static("", id="breadcrumb")
             yield Static("", id="ws-status")
         with Horizontal(id="body"):
             yield ScopesPane()
             yield SecretsPane()
             yield DetailPane()
+        yield Input(id="filter-bar", placeholder="filter…")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -159,6 +164,72 @@ class MainScreen(Screen[None]):
             f"  ·  {self._status_text}  ·  {seal}"
         )
 
+    def _render_breadcrumb(self) -> None:
+        bc = self.query_one("#breadcrumb", Static)
+        parts: list[str] = []
+        if self.current_scope:
+            parts.append(f"[b $primary]{self.current_scope}[/]")
+        if self.current_secret:
+            parts.append(f"[$accent]{self.current_secret}[/]")
+        bc.update("  [dim]▸[/]  ".join(parts))
+
+    # ── scope view models + filtering ───────────────────────────────────
+    def _scope_rows(self) -> list[ScopeRow]:
+        access = {s.scope: s.effective for s in self._sess.auth_summary()}
+        return [
+            ScopeRow(
+                name=sc.name,
+                icon=sc.icon,
+                count=len(self._sess.secrets_for(sc.name)),
+                access=access.get(sc.name, "—"),
+            )
+            for sc in self._sess.scopes
+        ]
+
+    def _access_for(self, name: str) -> str:
+        return next(
+            (s.effective for s in self._sess.auth_summary() if s.scope == name), "—"
+        )
+
+    def action_filter(self) -> None:
+        if self.session is None:
+            return
+        focused = getattr(self.focused, "id", None)
+        self._filter_target = "secrets" if focused == "secrets-table" else "scopes"
+        bar = self.query_one("#filter-bar", Input)
+        bar.placeholder = f"filter {self._filter_target}… (esc to clear)"
+        bar.value = ""
+        bar.display = True
+        bar.focus()
+
+    def action_cancel_filter(self) -> None:
+        if self.query_one("#filter-bar", Input).display:
+            self._close_filter(clear=True)
+
+    def _close_filter(self, *, clear: bool) -> None:
+        if clear:
+            self._apply_filter("")
+        self.query_one("#filter-bar", Input).display = False
+        if self._filter_target == "secrets":
+            self.secrets_pane.focus_table()
+        else:
+            self.scopes_pane.query_one(ListView).focus()
+        self._filter_target = None
+
+    def _apply_filter(self, text: str) -> None:
+        if self._filter_target == "secrets":
+            self.secrets_pane.apply_filter(text)
+        elif self._filter_target == "scopes":
+            self.scopes_pane.apply_filter(text)
+
+    @on(Input.Changed, "#filter-bar")
+    def _filter_changed(self, event: Input.Changed) -> None:
+        self._apply_filter(event.value)
+
+    @on(Input.Submitted, "#filter-bar")
+    def _filter_submitted(self) -> None:
+        self._close_filter(clear=False)
+
     # ── login / onboarding ─────────────────────────────────────────────
     def action_switch_workspace(self) -> None:
         self.open_login()
@@ -209,6 +280,7 @@ class MainScreen(Screen[None]):
         self.scopes_pane.show([])
         self.secrets_pane.clear()
         self.detail_pane.clear()
+        self._render_breadcrumb()
         self._set_status("establishing uplink…", dot="◐", color="$accent")
 
         identity = await asyncio.to_thread(session.authenticate)
@@ -224,17 +296,21 @@ class MainScreen(Screen[None]):
         except StoreError as exc:
             self._set_status(f"[$error]{exc}[/]", dot="○", color="$error")
             return
-        self.scopes_pane.show(scopes)
+        self.scopes_pane.show(self._scope_rows())
 
         total = len(scopes)
         for i, scope in enumerate(scopes, 1):
             await asyncio.to_thread(session.warm_scope, scope.name)
             spin = self._SPINNER[i % len(self._SPINNER)]
             line = self._WARM_LINES[i % len(self._WARM_LINES)]
-            self._set_status(f"{line}… {i}/{total}", dot=spin, color="$accent")
+            filled = round(i / total * 10)
+            bar = f"[$primary]{'▰' * filled}[/][$panel]{'▱' * (10 - filled)}[/]"
+            self._set_status(f"{line}…  {bar} {i}/{total}", dot=spin, color="$accent")
             if scope.name == self.current_scope:
                 self._show_scope(scope.name)
 
+        # refresh rows now that counts + access are warmed
+        self.scopes_pane.show(self._scope_rows(), keep=self.current_scope, focus=False)
         plural = "scope" if total == 1 else "scopes"
         self._set_status(f"{total} {plural} online", dot="●", color="$success")
 
@@ -247,13 +323,17 @@ class MainScreen(Screen[None]):
         self.secrets_pane.show(name, secrets)
         scope = self._sess.scope(name)
         if scope:
-            self.detail_pane.show_scope(scope, len(secrets), self._sess.acls_for(name))
+            self.detail_pane.show_scope(
+                scope, len(secrets), self._sess.acls_for(name), self._access_for(name)
+            )
+        self._render_breadcrumb()
         self._render_status()  # reset the seal indicator
 
     def _show_secret(self, key: str) -> None:
         self.current_secret = key
         self._revealed = None
         self._render_secret()
+        self._render_breadcrumb()
 
     def _render_secret(self) -> None:
         if not (self.session and self.current_scope and self.current_secret):
@@ -356,7 +436,7 @@ class MainScreen(Screen[None]):
         except StoreError as exc:
             self.notify(f"Create scope failed: {exc}", severity="error")
             return
-        self.scopes_pane.show(self._sess.scopes)
+        self.scopes_pane.show(self._scope_rows(), keep=name)
         self.notify(f"🔒 Scope “{name}” created.")
 
     def action_new_secret(self) -> None:
@@ -388,6 +468,7 @@ class MainScreen(Screen[None]):
             return
         if scope == self.current_scope:
             self._show_scope(scope)
+        self.scopes_pane.show(self._scope_rows(), keep=self.current_scope, focus=False)
         self.notify(f"🔑 Secret “{key}” saved.")
 
     def action_delete(self) -> None:
@@ -426,6 +507,7 @@ class MainScreen(Screen[None]):
             return
         if scope == self.current_scope:
             self._show_scope(scope)
+        self.scopes_pane.show(self._scope_rows(), keep=self.current_scope, focus=False)
         self.notify(f"Secret “{key}” deleted.")
 
     @work(group="mutate")
@@ -435,8 +517,11 @@ class MainScreen(Screen[None]):
         except StoreError as exc:
             self.notify(f"Delete failed: {exc}", severity="error")
             return
-        self.scopes_pane.show(self._sess.scopes)
+        self.current_scope = self.current_secret = None
+        self.scopes_pane.show(self._scope_rows())
         self.secrets_pane.clear()
+        self.detail_pane.clear()
+        self._render_breadcrumb()
         self.notify(f"Scope “{name}” deleted.")
 
     # ── reveal / copy (US-10, US-16) ────────────────────────────────────
@@ -498,6 +583,7 @@ class MainScreen(Screen[None]):
         await asyncio.to_thread(self._sess.refresh_scope, name)
         if name == self.current_scope:
             self._show_scope(name)
+        self.scopes_pane.show(self._scope_rows(), keep=self.current_scope, focus=False)
         self._set_status(f"{self._sess.identity.user_name} · refreshed {name}")
 
     def action_refresh_workspace(self) -> None:

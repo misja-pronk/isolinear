@@ -5,6 +5,28 @@ Screen {
     color: $foreground;
 }
 
+/* toasts — LCARS-styled notifications */
+Toast {
+    background: $panel;
+    border: round $primary;
+    color: $foreground;
+}
+Toast.-error {
+    border: round $error;
+}
+
+/* footer — a solid LCARS bar with cyan keys */
+Footer {
+    background: $surface;
+}
+Footer > .footer-key--key {
+    color: $secondary;
+    text-style: bold;
+}
+Footer > .footer-key--description {
+    color: $text-muted;
+}
+
 /* ── top banner ─────────────────────────────────────────────── */
 #banner {
     height: 1;
@@ -17,12 +39,27 @@ Screen {
     color: $background;
     text-style: bold;
 }
-#banner #ws-status {
+#banner #breadcrumb {
     width: 1fr;
+    padding: 0 2;
+    color: $text-muted;
+    text-style: none;
+}
+#banner #ws-status {
+    width: auto;
     text-align: right;
     padding: 0 1;
     color: $text-muted;
     text-style: none;
+}
+
+/* filter bar — hidden until you press / */
+#filter-bar {
+    display: none;
+    dock: bottom;
+    height: 3;
+    border: round $secondary;
+    background: $surface;
 }
 
 /* ── three-pane body ────────────────────────────────────────── */

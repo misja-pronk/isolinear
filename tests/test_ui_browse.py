@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import cast
 
-from textual.widgets import ListView
+from textual.widgets import DataTable, ListView
 
 from fakes import seeded_store, stub_onboarding
 from keystone.app import KeystoneApp
@@ -73,6 +73,26 @@ async def test_tab_moves_focus_into_secrets_pane():
         await pilot.press("tab")
         await pilot.pause()
         assert getattr(app.focused, "id", None) == "secrets-table"
+
+
+async def test_filter_narrows_then_clears_secrets():
+    app, _ = _app_with_session()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        await pilot.press("j")  # prod: api-key, db-password
+        await pilot.press("tab")  # focus secrets
+        await pilot.pause()
+        table = cast(MainScreen, app.screen).secrets_pane.query_one(DataTable)
+        assert table.row_count == 2
+        await pilot.press("slash")  # open filter
+        await pilot.pause()
+        await pilot.press("d", "b")  # "db"
+        await pilot.pause()
+        assert table.row_count == 1  # only db-password
+        await pilot.press("escape")  # clear + close
+        await pilot.pause()
+        assert table.row_count == 2
 
 
 async def test_delete_secret_via_confirm_keeps_siblings():

@@ -32,3 +32,53 @@ KEYSTONE_THEME = Theme(
         "footer-background": "#0d0a14",
     },
 )
+
+# LCARS amber — the classic Okudagram orange/blue on black.
+KEYSTONE_AMBER = Theme(
+    name="keystone-amber",
+    primary="#ff9f43",  # LCARS amber
+    secondary="#6bb6ff",  # LCARS blue
+    accent="#ffd166",
+    warning="#ffd166",
+    error="#e8504f",
+    success="#6bb6ff",
+    foreground="#f3ead9",
+    background="#0a0a0a",
+    surface="#15110a",
+    panel="#241a0e",
+    dark=True,
+    variables={
+        "border": "#3a2a14",
+        "text-muted": "#9a8e76",
+        "block-cursor-background": "#ff9f43",
+        "block-cursor-foreground": "#0a0a0a",
+        "footer-key-foreground": "#6bb6ff",
+        "footer-background": "#0a0a0a",
+    },
+)
+
+# Phosphor green — a spare retro-terminal look.
+KEYSTONE_PHOSPHOR = Theme(
+    name="keystone-phosphor",
+    primary="#5ad27a",
+    secondary="#9ad29a",
+    accent="#d7d77a",
+    warning="#d7d77a",
+    error="#d2705a",
+    success="#5ad27a",
+    foreground="#c8d2c8",
+    background="#070b07",
+    surface="#0e150e",
+    panel="#152115",
+    dark=True,
+    variables={
+        "border": "#1d2d1d",
+        "text-muted": "#6f896f",
+        "block-cursor-background": "#5ad27a",
+        "block-cursor-foreground": "#070b07",
+        "footer-key-foreground": "#9ad29a",
+        "footer-background": "#070b07",
+    },
+)
+
+KEYSTONE_THEMES = [KEYSTONE_THEME, KEYSTONE_AMBER, KEYSTONE_PHOSPHOR]

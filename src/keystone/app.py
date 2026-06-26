@@ -15,7 +15,7 @@ from textual.binding import Binding
 from .application import OnboardingService, WorkspaceService
 from .infrastructure import DatabricksCfgProfileStore, DatabricksConnector
 from .interface.screens.main import MainScreen
-from .interface.theme import KEYSTONE_THEME
+from .interface.theme import KEYSTONE_THEMES
 
 
 class KeystoneApp(App[None]):
@@ -33,7 +33,8 @@ class KeystoneApp(App[None]):
         self._initial_session = session
 
     def on_mount(self) -> None:
-        self.register_theme(KEYSTONE_THEME)
+        for theme in KEYSTONE_THEMES:
+            self.register_theme(theme)
         self.theme = "keystone"
         onboarding = self._onboarding or OnboardingService(
             DatabricksConnector(), DatabricksCfgProfileStore()
