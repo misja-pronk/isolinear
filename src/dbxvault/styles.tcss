@@ -1,0 +1,206 @@
+/* Vault — Databricks Secret Manager */
+
+Screen {
+    background: $background;
+    color: $foreground;
+}
+
+/* ── top banner ─────────────────────────────────────────────── */
+#banner {
+    height: 1;
+    padding: 0 1;
+    background: $surface;
+    color: $primary;
+    text-style: bold;
+}
+#banner #brand {
+    width: auto;
+}
+#banner #ws-status {
+    width: 1fr;
+    text-align: right;
+    color: $text-muted;
+    text-style: none;
+}
+
+/* ── three-pane body ────────────────────────────────────────── */
+#body {
+    height: 1fr;
+}
+
+.pane {
+    border: round $border;
+    height: 1fr;
+    padding: 0;
+}
+.pane:focus-within {
+    border: round $primary;
+}
+.pane-title {
+    dock: top;
+    height: 1;
+    padding: 0 1;
+    background: $panel;
+    color: $primary;
+    text-style: bold;
+}
+
+#scopes-pane { width: 32; }
+#secrets-pane { width: 1fr; }
+#detail-pane { width: 46; }
+
+ListView {
+    background: transparent;
+}
+ListView > ListItem {
+    padding: 0 1;
+    background: transparent;
+}
+ListView > ListItem.--highlight {
+    background: $primary 25%;
+}
+ListView:focus > ListItem.--highlight {
+    background: $primary 40%;
+    color: $foreground;
+}
+
+.kv-icon { color: $accent; }
+
+DataTable {
+    background: transparent;
+    height: 1fr;
+}
+DataTable > .datatable--cursor {
+    background: $primary 40%;
+}
+DataTable > .datatable--header {
+    background: $panel;
+    color: $primary;
+    text-style: bold;
+}
+
+/* ── detail pane ────────────────────────────────────────────── */
+#detail-body {
+    padding: 1 1;
+}
+.detail-label {
+    color: $text-muted;
+}
+.detail-value {
+    color: $foreground;
+    text-style: bold;
+}
+.secret-value {
+    background: $background;
+    border: round $border;
+    padding: 0 1;
+    margin: 1 0;
+    color: $accent;
+}
+.badge-read { color: $secondary; }
+.badge-write { color: $success; }
+.badge-manage { color: $accent; }
+
+/* ── modals ─────────────────────────────────────────────────── */
+ModalScreen {
+    align: center middle;
+}
+#dialog {
+    width: 64;
+    max-width: 90%;
+    padding: 1 2;
+    background: $surface;
+    border: thick $primary;
+}
+#dialog.danger {
+    border: thick $error;
+}
+#dialog .dialog-title {
+    text-style: bold;
+    color: $primary;
+    margin-bottom: 1;
+}
+#dialog.danger .dialog-title {
+    color: $error;
+}
+#dialog Input {
+    margin: 1 0;
+}
+#dialog .buttons {
+    align-horizontal: right;
+    height: 3;
+    margin-top: 1;
+}
+#dialog Button {
+    margin-left: 2;
+}
+
+/* workspace + help pickers reuse the dialog frame */
+#picker-list {
+    height: auto;
+    max-height: 16;
+    margin-top: 1;
+}
+.help-key {
+    color: $primary;
+    text-style: bold;
+}
+
+#auth-table {
+    height: 1fr;
+}
+#acl-table {
+    height: auto;
+    max-height: 14;
+    margin-top: 1;
+}
+
+/* ── login / onboarding ─────────────────────────────────────── */
+LoginScreen {
+    background: $background;
+    align: center middle;
+}
+#login-card {
+    width: 72;
+    max-width: 92%;
+    height: auto;
+    padding: 1 2;
+    border: round $border;
+    background: $surface;
+}
+#login-logo {
+    color: $primary;
+    text-align: center;
+    text-style: bold;
+    margin-bottom: 1;
+}
+#login-tagline {
+    text-align: center;
+    color: $text-muted;
+    margin-bottom: 1;
+}
+.login-section {
+    color: $accent;
+    text-style: bold;
+    margin: 1 0 0 0;
+}
+#profiles {
+    height: auto;
+    max-height: 8;
+    border: round $border;
+    margin-top: 1;
+}
+#login-actions {
+    height: 3;
+    margin-top: 1;
+    align-horizontal: center;
+}
+#login-actions Button {
+    margin: 0 1;
+}
+#login-status {
+    height: auto;
+    min-height: 1;
+    margin-top: 1;
+    text-align: center;
+}
