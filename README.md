@@ -57,31 +57,41 @@ uv run keystone
 ```
 
 ## Architecture
-Two layers with a hard boundary:
+Hexagonal / DDD. Dependencies point inward; **all I/O is behind domain ports**,
+and the UI never touches infrastructure (`interface → application → domain ←
+infrastructure`):
 
 ```
 keystone/
-  core/          # pure domain + services — NO Textual imports
-    models.py    #   plain dataclasses
-    config.py    #   profile discovery
-    gateway.py   #   Gateway (Protocol)  +  DatabricksGateway (SDK adapter)
-    cache.py     #   in-memory cache
-    auth.py      #   OAuth login / account discovery / persistence
-    session.py   #   WorkspaceSession — all business logic lives here
-  ui/            # Textual adapters — NO business logic
-    theme.py
-    widgets.py   #   ScopesPane / SecretsPane / DetailPane
-    modals.py    #   confirm / forms / help / auth dialogs
-    screens/     #   MainScreen (browser) + LoginScreen (onboarding)
-  app.py         # thin App: theme + route to MainScreen
+  domain/                # the model, rules + ports — pure (no Textual/SDK/asyncio)
+    models.py            #   Scope / Secret / Acl / Identity / Workspace …
+    permissions.py       #   perm ranking + authorization_summary (US-13)
+    host.py              #   normalize_host (a small rule)
+    secret_store.py      #   SecretStore  — repository port
+    ports.py             #   WorkspaceConnector / AccountSession / ProfileStore
+    errors.py            #   StoreError / AuthError
+  application/           # use-cases / orchestration (depends on domain only)
+    workspace.py         #   WorkspaceService — secret-management use-cases
+    onboarding.py        #   OnboardingService — login/discovery use-cases
+    read_model.py        #   WorkspaceCache — in-memory projection the UI renders
+  infrastructure/        # adapters implementing the ports (only SDK importers)
+    databricks.py        #   DatabricksSecretStore  (SecretStore)
+    connector.py         #   DatabricksConnector    (WorkspaceConnector)
+    profiles.py          #   DatabricksCfgProfileStore (ProfileStore)
+    config.py            #   config-file location
+  interface/             # Textual presentation — NO business logic, NO infra
+    theme.py  widgets.py  modals.py  screens/
+  app.py                 # composition root: build adapters → wire → run
 ```
 
-- **`Gateway` is a `Protocol`** — the one seam to Databricks. `DatabricksGateway`
-  is the real adapter; tests inject an in-memory fake. Nothing above `gateway.py`
-  imports the SDK.
-- **`WorkspaceSession`** owns gateway + cache and every operation, as plain
-  synchronous methods. The UI just calls them (in worker threads) and renders —
-  so the whole domain is unit-testable without an event loop or a network.
+- **Ports & adapters:** the domain defines `SecretStore`, `WorkspaceConnector`,
+  and `ProfileStore` as `Protocol`s; infrastructure implements them. Nothing
+  outside `infrastructure/` imports the Databricks SDK.
+- **The UI depends only on `application` + `domain`.** It talks to
+  `WorkspaceService` / `OnboardingService`; `app.py` injects the concrete
+  adapters. Tests inject in-memory fakes.
+- **The domain stays pure:** authorization rules live in `domain/permissions.py`,
+  not on the cache; the cache is a plain read-model projection.
 
 ## Development
 

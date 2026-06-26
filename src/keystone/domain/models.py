@@ -1,4 +1,8 @@
-"""Plain data models used by the UI, decoupled from the Databricks SDK types."""
+"""Domain model — the ubiquitous language of Keystone as plain value objects.
+
+No Textual, no Databricks SDK, no I/O. These are the nouns the whole app speaks:
+workspaces, scopes, secrets, ACLs, identity.
+"""
 
 from __future__ import annotations
 
@@ -96,22 +100,3 @@ class Identity:
     display_name: str = ""
     authenticated: bool = False
     error: str = ""
-
-
-# Permission ranking so we can compute "effective" permission for the current user.
-_PERM_RANK = {"READ": 1, "WRITE": 2, "MANAGE": 3}
-
-
-def perm_rank(permission: str) -> int:
-    return _PERM_RANK.get(permission, 0)
-
-
-@dataclass
-class AuthSummary:
-    """Per-scope authorization picture for the authorization overview screen."""
-
-    scope: str
-    effective: str = "—"  # current user's effective permission
-    acl_count: int = 0
-    can_write: bool = False
-    can_manage: bool = False

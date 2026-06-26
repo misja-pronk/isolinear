@@ -1,7 +1,12 @@
-"""In-memory cache that pre-loads a workspace for an instant browsing experience.
+"""WorkspaceCache — the in-memory read model the UI renders from.
+
+A projection that the application service warms up front (US-14) and keeps in
+sync on writes. Pure data + bookkeeping; it holds no business rules (those live
+in the domain) and does no I/O.
 
 Strategy (US-14/16):
-  * On connect we warm scopes -> secrets metadata -> ACLs in the background.
+  * On connect the service warms scopes -> secret metadata -> ACLs in the
+    background.
   * Secret *values* are NOT bulk-loaded; they are fetched lazily on reveal and
     cached thereafter, so sensitive material isn't pulled into memory needlessly.
 """
@@ -10,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .models import Acl, AuthSummary, Identity, Scope, Secret, perm_rank
+from ..domain import Acl, Identity, Scope, Secret
 
 
 @dataclass
@@ -39,7 +44,7 @@ class WorkspaceCache:
     def set_value(self, scope: str, key: str, value: str) -> None:
         self.values[(scope, key)] = value
 
-    # -- mutation keeping cache + UI consistent -----------------------------
+    # -- mutation keeping the read model + UI consistent --------------------
     def upsert_secret(self, secret: Secret) -> None:
         rows = self.secrets.setdefault(secret.scope, [])
         for i, existing in enumerate(rows):
@@ -66,27 +71,3 @@ class WorkspaceCache:
         self.secrets.pop(name, None)
         self.acls.pop(name, None)
         self.values = {k: v for k, v in self.values.items() if k[0] != name}
-
-    # -- authorization overview (US-13) -------------------------------------
-    def auth_summary(self) -> list[AuthSummary]:
-        me = self.identity.user_name
-        summaries: list[AuthSummary] = []
-        for scope in self.scopes:
-            acls = self.acls.get(scope.name, [])
-            effective = "—"
-            best = 0
-            for acl in acls:
-                is_mine = acl.principal in (me, "users", "admins")
-                if is_mine and perm_rank(acl.permission) > best:
-                    best = perm_rank(acl.permission)
-                    effective = acl.permission
-            summaries.append(
-                AuthSummary(
-                    scope=scope.name,
-                    effective=effective,
-                    acl_count=len(acls),
-                    can_write=best >= perm_rank("WRITE"),
-                    can_manage=best >= perm_rank("MANAGE"),
-                )
-            )
-        return summaries

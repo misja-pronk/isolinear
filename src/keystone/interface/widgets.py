@@ -13,7 +13,7 @@ from textual.containers import Vertical, VerticalScroll
 from textual.message import Message
 from textual.widgets import DataTable, Label, ListItem, ListView, Static
 
-from ..core import Acl, Scope, Secret
+from ..domain import Acl, Scope, Secret
 
 PERM_COLOR = {"READ": "$secondary", "WRITE": "$success", "MANAGE": "$accent"}
 

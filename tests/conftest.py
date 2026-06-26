@@ -4,19 +4,19 @@ from __future__ import annotations
 
 import pytest
 
-from fakes import FakeGateway, seeded_gateway
-from keystone.core import WorkspaceSession
+from fakes import FakeSecretStore, seeded_store
+from keystone.application import WorkspaceService
 
 
 @pytest.fixture
-def fake_gateway() -> FakeGateway:
-    return seeded_gateway()
+def fake_store() -> FakeSecretStore:
+    return seeded_store()
 
 
 @pytest.fixture
-def session(fake_gateway: FakeGateway) -> WorkspaceSession:
+def session(fake_store: FakeSecretStore) -> WorkspaceService:
     """A session whose scopes/secrets/acls are already warmed."""
-    s = WorkspaceSession(fake_gateway, "test")
+    s = WorkspaceService(fake_store, "test")
     s.authenticate()
     s.load_scopes()
     for scope in s.scopes:

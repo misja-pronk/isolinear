@@ -1,8 +1,10 @@
 """Keystone — a terminal Databricks secret manager.
 
-The App is deliberately thin: it installs the theme and the stylesheet and hands
-off to `MainScreen`, which owns the browsing experience. All domain logic lives
-in `keystone.core`; all UI in `keystone.ui`.
+The App is the composition root: it builds the infrastructure adapters, wires
+them into the `OnboardingService`, installs the theme, and hands off to
+`MainScreen`. Domain logic lives in `keystone.domain`, use-cases in
+`keystone.application`, adapters in `keystone.infrastructure`; UI in
+`keystone.interface`.
 """
 
 from __future__ import annotations
@@ -10,9 +12,10 @@ from __future__ import annotations
 from textual.app import App
 from textual.binding import Binding
 
-from .core import WorkspaceSession, discover_workspaces
-from .ui.screens.main import MainScreen
-from .ui.theme import KEYSTONE_THEME
+from .application import OnboardingService, WorkspaceService
+from .infrastructure import DatabricksCfgProfileStore, DatabricksConnector
+from .interface.screens.main import MainScreen
+from .interface.theme import KEYSTONE_THEME
 
 
 class KeystoneApp(App[None]):
@@ -22,22 +25,20 @@ class KeystoneApp(App[None]):
 
     def __init__(
         self,
-        profiles=None,
-        session: WorkspaceSession | None = None,
+        onboarding: OnboardingService | None = None,
+        session: WorkspaceService | None = None,
     ) -> None:
         super().__init__()
-        self._initial_profiles = profiles
+        self._onboarding = onboarding
         self._initial_session = session
 
     def on_mount(self) -> None:
         self.register_theme(KEYSTONE_THEME)
         self.theme = "keystone"
-        profiles = (
-            self._initial_profiles
-            if self._initial_profiles is not None
-            else discover_workspaces()
+        onboarding = self._onboarding or OnboardingService(
+            DatabricksConnector(), DatabricksCfgProfileStore()
         )
-        self.push_screen(MainScreen(profiles, self._initial_session))
+        self.push_screen(MainScreen(onboarding, self._initial_session))
 
 
 def main() -> None:

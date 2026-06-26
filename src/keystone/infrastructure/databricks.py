@@ -1,47 +1,20 @@
-"""The Databricks boundary.
+"""DatabricksSecretStore — the infrastructure adapter implementing SecretStore.
 
-`Gateway` is the port the rest of the app depends on; `DatabricksGateway` is the
-concrete adapter over the Databricks SDK. Tests substitute any object satisfying
-the `Gateway` protocol (see tests/fakes.py), so nothing above this layer ever
-imports the SDK.
-
-All methods are blocking; the UI calls them from worker threads. Adapters convert
-SDK types into our own plain models (see models.py).
+The only place that imports the Databricks SDK. Converts SDK types into our
+domain value objects and SDK exceptions into `StoreError`. All methods block;
+the UI calls them from worker threads.
 """
 
 from __future__ import annotations
 
 import base64
-from typing import Protocol, runtime_checkable
 
-from .models import Acl, Identity, Scope, Secret
-
-
-class GatewayError(Exception):
-    """Raised when a Databricks operation fails; carries a UI-friendly message."""
+from ..domain import Acl, Identity, Scope, Secret
+from ..domain.errors import StoreError
 
 
-@runtime_checkable
-class Gateway(Protocol):
-    """Port: everything the app needs from a Databricks workspace."""
-
-    profile: str | None
-
-    def whoami(self) -> Identity: ...
-    def list_scopes(self) -> list[Scope]: ...
-    def create_scope(self, name: str) -> None: ...
-    def delete_scope(self, name: str) -> None: ...
-    def list_secrets(self, scope: str) -> list[Secret]: ...
-    def get_secret_value(self, scope: str, key: str) -> str: ...
-    def put_secret(self, scope: str, key: str, value: str) -> None: ...
-    def delete_secret(self, scope: str, key: str) -> None: ...
-    def list_acls(self, scope: str) -> list[Acl]: ...
-    def put_acl(self, scope: str, principal: str, permission: str) -> None: ...
-    def delete_acl(self, scope: str, principal: str) -> None: ...
-
-
-class DatabricksGateway:
-    """Adapter: a `Gateway` backed by a Databricks `WorkspaceClient`.
+class DatabricksSecretStore:
+    """A `SecretStore` backed by a Databricks `WorkspaceClient`.
 
     Two ways in:
       * from_profile(name) — connect via a ~/.databrickscfg profile (lazy).
@@ -54,11 +27,11 @@ class DatabricksGateway:
         self._client = client  # may be pre-built (OAuth/account) or lazy (profile)
 
     @classmethod
-    def from_profile(cls, profile: str) -> DatabricksGateway:
+    def from_profile(cls, profile: str) -> DatabricksSecretStore:
         return cls(profile=profile)
 
     @classmethod
-    def from_client(cls, client) -> DatabricksGateway:
+    def from_client(cls, client) -> DatabricksSecretStore:
         return cls(client=client)
 
     # -- connection ---------------------------------------------------------
@@ -93,19 +66,19 @@ class DatabricksGateway:
                 out.append(Scope(name=s.name or "", backend_type=backend))
             return sorted(out, key=lambda s: s.name.lower())
         except Exception as exc:  # noqa: BLE001
-            raise GatewayError(_short(exc)) from exc
+            raise StoreError(_short(exc)) from exc
 
     def create_scope(self, name: str) -> None:
         try:
             self.client.secrets.create_scope(scope=name)
         except Exception as exc:  # noqa: BLE001
-            raise GatewayError(_short(exc)) from exc
+            raise StoreError(_short(exc)) from exc
 
     def delete_scope(self, name: str) -> None:
         try:
             self.client.secrets.delete_scope(scope=name)
         except Exception as exc:  # noqa: BLE001
-            raise GatewayError(_short(exc)) from exc
+            raise StoreError(_short(exc)) from exc
 
     # -- secrets ------------------------------------------------------------
     def list_secrets(self, scope: str) -> list[Secret]:
@@ -121,7 +94,7 @@ class DatabricksGateway:
                 )
             return sorted(out, key=lambda s: s.key.lower())
         except Exception as exc:  # noqa: BLE001
-            raise GatewayError(_short(exc)) from exc
+            raise StoreError(_short(exc)) from exc
 
     def get_secret_value(self, scope: str, key: str) -> str:
         try:
@@ -133,19 +106,19 @@ class DatabricksGateway:
                 # Binary or non-utf8 secret — show the base64 form.
                 return raw
         except Exception as exc:  # noqa: BLE001
-            raise GatewayError(_short(exc)) from exc
+            raise StoreError(_short(exc)) from exc
 
     def put_secret(self, scope: str, key: str, value: str) -> None:
         try:
             self.client.secrets.put_secret(scope=scope, key=key, string_value=value)
         except Exception as exc:  # noqa: BLE001
-            raise GatewayError(_short(exc)) from exc
+            raise StoreError(_short(exc)) from exc
 
     def delete_secret(self, scope: str, key: str) -> None:
         try:
             self.client.secrets.delete_secret(scope=scope, key=key)
         except Exception as exc:  # noqa: BLE001
-            raise GatewayError(_short(exc)) from exc
+            raise StoreError(_short(exc)) from exc
 
     # -- acls ---------------------------------------------------------------
     def list_acls(self, scope: str) -> list[Acl]:
@@ -156,7 +129,7 @@ class DatabricksGateway:
                 out.append(Acl(principal=a.principal or "", permission=perm))
             return sorted(out, key=lambda a: a.principal.lower())
         except Exception as exc:  # noqa: BLE001
-            raise GatewayError(_short(exc)) from exc
+            raise StoreError(_short(exc)) from exc
 
     def put_acl(self, scope: str, principal: str, permission: str) -> None:
         from databricks.sdk.service.workspace import AclPermission
@@ -166,13 +139,13 @@ class DatabricksGateway:
                 scope=scope, principal=principal, permission=AclPermission(permission)
             )
         except Exception as exc:  # noqa: BLE001
-            raise GatewayError(_short(exc)) from exc
+            raise StoreError(_short(exc)) from exc
 
     def delete_acl(self, scope: str, principal: str) -> None:
         try:
             self.client.secrets.delete_acl(scope=scope, principal=principal)
         except Exception as exc:  # noqa: BLE001
-            raise GatewayError(_short(exc)) from exc
+            raise StoreError(_short(exc)) from exc
 
 
 def _short(exc: Exception) -> str:

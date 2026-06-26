@@ -20,7 +20,8 @@ from textual.containers import Center, Horizontal, Vertical
 from textual.screen import ModalScreen, Screen
 from textual.widgets import Button, Input, Label, ListItem, ListView, Select, Static
 
-from ...core import CLOUDS, AccountWorkspace, DatabricksGateway, Workspace, auth
+from ...application import Connection, OnboardingService
+from ...domain import CLOUDS, AccountSession, AccountWorkspace, AuthError, Workspace
 
 # An arch with its keystone (cyan) set at the crown.
 LOGO = """\
@@ -34,10 +35,7 @@ LOGO = """\
 
 @dataclass
 class ConnectResult:
-    gateway: DatabricksGateway
-    label: str
-    host: str = ""
-    account_id: str | None = None
+    connection: Connection
     save: bool = False
     save_name: str = ""
 
@@ -157,11 +155,17 @@ class LoginScreen(Screen[ConnectResult | None]):
 
     BINDINGS = [Binding("escape", "back", "Back", show=False)]
 
-    def __init__(self, profiles: list[Workspace], can_cancel: bool = False) -> None:
+    def __init__(
+        self,
+        profiles: list[Workspace],
+        onboarding: OnboardingService,
+        can_cancel: bool = False,
+    ) -> None:
         super().__init__()
         self._profiles = profiles
+        self._onboarding = onboarding
         self._can_cancel = can_cancel
-        self._account_client = None  # live AccountClient between discover -> pick
+        self._account_session: AccountSession | None = None  # between discover -> pick
 
     def compose(self) -> ComposeResult:
         with Center(), Vertical(id="login-card"):
@@ -198,12 +202,8 @@ class LoginScreen(Screen[ConnectResult | None]):
     @on(ListView.Selected, "#profiles")
     def _pick_profile(self, event: ListView.Selected) -> None:
         profile = self._profiles[event.list_view.index or 0]
-        self.dismiss(
-            ConnectResult(
-                gateway=DatabricksGateway.from_profile(profile.profile),
-                label=profile.profile,
-            )
-        )
+        connection = self._onboarding.connect_profile(profile.profile)
+        self.dismiss(ConnectResult(connection=connection))
 
     # -- workspace URL --------------------------------------------------
     @on(Button.Pressed, "#btn-url")
@@ -219,17 +219,13 @@ class LoginScreen(Screen[ConnectResult | None]):
     async def _do_url_login(self, host: str, save_name: str) -> None:
         self._status(f"[$accent]Opening browser to sign in to {host}…[/]")
         try:
-            gateway, label = await asyncio.to_thread(auth.login_workspace, host)
-        except auth.AuthError as exc:
+            connection = await asyncio.to_thread(self._onboarding.connect_url, host)
+        except AuthError as exc:
             self._status(f"[$error]Sign-in failed:[/] {exc}")
             return
         self.dismiss(
             ConnectResult(
-                gateway=gateway,
-                label=label,
-                host=_resolved_host(gateway, host),
-                save=bool(save_name),
-                save_name=save_name,
+                connection=connection, save=bool(save_name), save_name=save_name
             )
         )
 
@@ -247,18 +243,18 @@ class LoginScreen(Screen[ConnectResult | None]):
     async def _do_discover(self, cloud: str, account_id: str, save_name: str) -> None:
         self._status("[$accent]Opening browser to sign in to your account…[/]")
         try:
-            account, workspaces = await asyncio.to_thread(
-                auth.discover_account, cloud, account_id
+            session = await asyncio.to_thread(
+                self._onboarding.discover_account, cloud, account_id
             )
-        except auth.AuthError as exc:
+        except AuthError as exc:
             self._status(f"[$error]Discovery failed:[/] {exc}")
             return
-        if not workspaces:
+        if not session.workspaces:
             self._status("[$accent]No workspaces found in this account.[/]")
             return
-        self._account_client = account
+        self._account_session = session
         self._pending_save = (account_id, save_name)
-        self.app.push_screen(DiscoveredPicker(workspaces), self._after_pick)
+        self.app.push_screen(DiscoveredPicker(session.workspaces), self._after_pick)
 
     def _after_pick(self, ws: AccountWorkspace | None) -> None:
         if ws:
@@ -266,23 +262,23 @@ class LoginScreen(Screen[ConnectResult | None]):
 
     @work(group="login")
     async def _do_connect_account_ws(self, ws: AccountWorkspace) -> None:
+        if self._account_session is None:
+            return
         self._status(f"[$accent]Connecting to {ws.name}…[/]")
+        account_id, save_name = getattr(self, "_pending_save", ("", ""))
         try:
-            gateway, label = await asyncio.to_thread(
-                auth.connect_account_workspace, self._account_client, ws
+            connection = await asyncio.to_thread(
+                self._onboarding.connect_account_workspace,
+                self._account_session,
+                ws,
+                account_id or None,
             )
-        except auth.AuthError as exc:
+        except AuthError as exc:
             self._status(f"[$error]Connect failed:[/] {exc}")
             return
-        account_id, save_name = getattr(self, "_pending_save", ("", ""))
         self.dismiss(
             ConnectResult(
-                gateway=gateway,
-                label=label,
-                host=_resolved_host(gateway, ""),
-                account_id=account_id or None,
-                save=bool(save_name),
-                save_name=save_name,
+                connection=connection, save=bool(save_name), save_name=save_name
             )
         )
 
@@ -294,10 +290,3 @@ class LoginScreen(Screen[ConnectResult | None]):
     def action_back(self) -> None:
         if self._can_cancel:
             self.dismiss(None)
-
-
-def _resolved_host(gateway: DatabricksGateway, fallback: str) -> str:
-    try:
-        return gateway.client.config.host or fallback
-    except Exception:  # noqa: BLE001
-        return fallback

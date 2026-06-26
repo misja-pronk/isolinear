@@ -1,16 +1,17 @@
-"""An in-memory Gateway for tests — a faithful stand-in for Databricks.
-
-Implements the `Gateway` protocol, records calls, and can be told to fail, so the
-whole stack above the SDK boundary is testable without a network.
+"""In-memory test doubles for the domain ports — faithful stand-ins for
+Databricks. They implement the `SecretStore`, `WorkspaceConnector`, and
+`ProfileStore` protocols so the whole stack above infrastructure is testable
+without a network.
 """
 
 from __future__ import annotations
 
-from keystone.core import Acl, Identity, Scope, Secret
-from keystone.core.gateway import GatewayError
+from keystone.application import OnboardingService
+from keystone.domain import Acl, Identity, Scope, Secret
+from keystone.domain.errors import StoreError
 
 
-class FakeGateway:
+class FakeSecretStore:
     def __init__(
         self,
         *,
@@ -34,7 +35,7 @@ class FakeGateway:
     def _record(self, *call) -> None:
         self.calls.append(call)
         if call[0] in self._fail_on:
-            raise GatewayError(f"boom:{call[0]}")
+            raise StoreError(f"boom:{call[0]}")
 
     def count(self, name: str) -> int:
         return sum(1 for c in self.calls if c[0] == name)
@@ -46,7 +47,7 @@ class FakeGateway:
 
     def list_scopes(self) -> list[Scope]:
         self._record("list_scopes")
-        # mirror DatabricksGateway's observable contract: sorted results
+        # mirror DatabricksSecretStore's observable contract: sorted results
         return sorted(self._scopes, key=lambda s: s.name.lower())
 
     def create_scope(self, name: str) -> None:
@@ -96,9 +97,9 @@ class FakeGateway:
         ]
 
 
-def seeded_gateway() -> FakeGateway:
+def seeded_store() -> FakeSecretStore:
     """A standard two-scope dataset used across UI/session tests."""
-    return FakeGateway(
+    return FakeSecretStore(
         scopes=[Scope("prod", "DATABRICKS"), Scope("kv", "AZURE_KEYVAULT")],
         secrets={
             "prod": [
@@ -112,3 +113,35 @@ def seeded_gateway() -> FakeGateway:
             "kv": [Acl("users", "READ")],
         },
     )
+
+
+class StubProfiles:
+    """A `ProfileStore` that holds profiles in memory."""
+
+    def __init__(self, workspaces=None) -> None:
+        self._workspaces = list(workspaces or [])
+        self.saved: list[tuple] = []
+
+    def discover(self):
+        return list(self._workspaces)
+
+    def save(self, name, host, account_id=None) -> None:
+        self.saved.append((name, host, account_id))
+
+
+class StubConnector:
+    """A `WorkspaceConnector` that refuses to connect (login needs a network)."""
+
+    def connect_profile(self, profile):
+        raise NotImplementedError
+
+    def connect_url(self, host):
+        raise NotImplementedError
+
+    def discover_account(self, cloud_key, account_id):
+        raise NotImplementedError
+
+
+def stub_onboarding(profiles=None) -> OnboardingService:
+    """An OnboardingService wired to stubs — saved profiles, no live connect."""
+    return OnboardingService(StubConnector(), StubProfiles(profiles))

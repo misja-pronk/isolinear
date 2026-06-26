@@ -4,17 +4,17 @@ from typing import cast
 
 from textual.widgets import ListView
 
-from fakes import seeded_gateway
+from fakes import seeded_store, stub_onboarding
 from keystone.app import KeystoneApp
-from keystone.core import WorkspaceSession
-from keystone.ui.screens.login import LoginScreen
-from keystone.ui.screens.main import MainScreen
-from keystone.ui.widgets import ScopesPane
+from keystone.application import WorkspaceService
+from keystone.interface.screens.login import LoginScreen
+from keystone.interface.screens.main import MainScreen
+from keystone.interface.widgets import ScopesPane
 
 
-def _app_with_session() -> tuple[KeystoneApp, WorkspaceSession]:
-    session = WorkspaceSession(seeded_gateway(), "test")
-    return KeystoneApp(profiles=[], session=session), session
+def _app_with_session() -> tuple[KeystoneApp, WorkspaceService]:
+    session = WorkspaceService(seeded_store(), "test")
+    return KeystoneApp(onboarding=stub_onboarding(), session=session), session
 
 
 async def test_warm_populates_scopes_and_selects_first():

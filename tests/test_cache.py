@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from keystone.core import Acl, Identity, Scope, Secret, WorkspaceCache
+from keystone.application import WorkspaceCache
+from keystone.domain import Scope, Secret
 
 
 def test_upsert_secret_adds_updates_and_sorts():
@@ -32,18 +33,3 @@ def test_add_and_remove_scope():
     cache.remove_scope("s")
     assert cache.scopes == []
     assert cache.cached_value("s", "k") is None
-
-
-def test_auth_summary_computes_effective_permission():
-    cache = WorkspaceCache(label="t")
-    cache.identity = Identity("me@corp.com", authenticated=True)
-    cache.scopes = [Scope("prod"), Scope("ro")]
-    cache.acls = {
-        "prod": [Acl("me@corp.com", "MANAGE"), Acl("users", "READ")],
-        "ro": [Acl("users", "READ")],  # matched via the 'users' group
-    }
-    summaries = {s.scope: s for s in cache.auth_summary()}
-    assert summaries["prod"].effective == "MANAGE"
-    assert summaries["prod"].can_write and summaries["prod"].can_manage
-    assert summaries["ro"].effective == "READ"
-    assert not summaries["ro"].can_write

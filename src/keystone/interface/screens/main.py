@@ -1,6 +1,6 @@
 """MainScreen — the three-pane secret browser for one workspace session.
 
-Holds no business logic: every operation is delegated to a `WorkspaceSession`
+Holds no business logic: every operation is delegated to a `WorkspaceService`
 (run in a worker thread), and rendering is delegated to the pane widgets. The
 screen's job is wiring — selections in, session calls out, results to panes.
 """
@@ -18,12 +18,8 @@ from textual.containers import Horizontal
 from textual.screen import Screen
 from textual.widgets import DataTable, Footer, ListView, Static
 
-from ...core import (
-    GatewayError,
-    WorkspaceSession,
-    auth,
-    discover_workspaces,
-)
+from ...application import OnboardingService, WorkspaceService
+from ...domain import StoreError
 from ..modals import (
     AuthScreen,
     ConfirmModal,
@@ -83,9 +79,12 @@ class MainScreen(Screen[None]):
         Binding("G", "jump('bottom')", "Bottom", show=False),
     ]
 
-    def __init__(self, profiles=None, session: WorkspaceSession | None = None) -> None:
+    def __init__(
+        self, onboarding: OnboardingService, session: WorkspaceService | None = None
+    ) -> None:
         super().__init__()
-        self.profiles = profiles if profiles is not None else []
+        self._onboarding = onboarding
+        self.profiles = onboarding.saved_workspaces()
         self.session = session
         self.current_scope: str | None = None
         self.current_secret: str | None = None
@@ -124,7 +123,7 @@ class MainScreen(Screen[None]):
         return self.query_one(DetailPane)
 
     @property
-    def _sess(self) -> WorkspaceSession:
+    def _sess(self) -> WorkspaceService:
         """The active session. Callers below only run once connected."""
         assert self.session is not None, "no active session"
         return self.session
@@ -166,7 +165,9 @@ class MainScreen(Screen[None]):
 
     def open_login(self) -> None:
         self.app.push_screen(
-            LoginScreen(self.profiles, can_cancel=self.session is not None),
+            LoginScreen(
+                self.profiles, self._onboarding, can_cancel=self.session is not None
+            ),
             self._on_login_result,
         )
 
@@ -175,23 +176,27 @@ class MainScreen(Screen[None]):
             if self.session is None:
                 self._set_status("not connected · press w to sign in")
             return
-        if result.save and result.host:
+        if result.save and result.connection.host:
             self._persist_profile(result)
-        self.load(WorkspaceSession(result.gateway, result.label))
+        self.load(result.connection.service)
 
     @work(group="persist")
     async def _persist_profile(self, result: ConnectResult) -> None:
+        conn = result.connection
         try:
             await asyncio.to_thread(
-                auth.save_profile, result.save_name, result.host, result.account_id
+                self._onboarding.save_profile,
+                result.save_name,
+                conn.host,
+                conn.account_id,
             )
-            self.profiles = await asyncio.to_thread(discover_workspaces)
+            self.profiles = await asyncio.to_thread(self._onboarding.saved_workspaces)
             self.notify(f"Saved profile “{result.save_name}”.")
         except Exception as exc:  # noqa: BLE001
             self.notify(f"Could not save profile: {exc}", severity="error")
 
     # ── connect + warm cache (US-2, US-14) ──────────────────────────────
-    def load(self, session: WorkspaceSession) -> None:
+    def load(self, session: WorkspaceService) -> None:
         self.session = session
         self._warm()
 
@@ -216,7 +221,7 @@ class MainScreen(Screen[None]):
 
         try:
             scopes = await asyncio.to_thread(session.load_scopes)
-        except GatewayError as exc:
+        except StoreError as exc:
             self._set_status(f"[$error]{exc}[/]", dot="○", color="$error")
             return
         self.scopes_pane.show(scopes)
@@ -348,7 +353,7 @@ class MainScreen(Screen[None]):
     async def _create_scope(self, name: str) -> None:
         try:
             await asyncio.to_thread(self._sess.create_scope, name)
-        except GatewayError as exc:
+        except StoreError as exc:
             self.notify(f"Create scope failed: {exc}", severity="error")
             return
         self.scopes_pane.show(self._sess.scopes)
@@ -378,7 +383,7 @@ class MainScreen(Screen[None]):
     async def _put_secret(self, scope: str, key: str, value: str) -> None:
         try:
             await asyncio.to_thread(self._sess.put_secret, scope, key, value)
-        except GatewayError as exc:
+        except StoreError as exc:
             self.notify(f"Save failed: {exc}", severity="error")
             return
         if scope == self.current_scope:
@@ -416,7 +421,7 @@ class MainScreen(Screen[None]):
     async def _delete_secret(self, scope: str, key: str) -> None:
         try:
             await asyncio.to_thread(self._sess.delete_secret, scope, key)
-        except GatewayError as exc:
+        except StoreError as exc:
             self.notify(f"Delete failed: {exc}", severity="error")
             return
         if scope == self.current_scope:
@@ -427,7 +432,7 @@ class MainScreen(Screen[None]):
     async def _delete_scope(self, name: str) -> None:
         try:
             await asyncio.to_thread(self._sess.delete_scope, name)
-        except GatewayError as exc:
+        except StoreError as exc:
             self.notify(f"Delete failed: {exc}", severity="error")
             return
         self.scopes_pane.show(self._sess.scopes)
@@ -453,7 +458,7 @@ class MainScreen(Screen[None]):
         scope, key = target
         try:
             await asyncio.to_thread(self._sess.reveal, scope, key)
-        except GatewayError as exc:
+        except StoreError as exc:
             self.notify(f"Cannot read value: {exc}", severity="error")
             return
         if (self.current_scope, self.current_secret) == target:
@@ -476,7 +481,7 @@ class MainScreen(Screen[None]):
         scope, key = target
         try:
             value = await asyncio.to_thread(self._sess.reveal, scope, key)
-        except GatewayError as exc:
+        except StoreError as exc:
             self.notify(f"Cannot read value: {exc}", severity="error")
             return
         self.app.copy_to_clipboard(value)

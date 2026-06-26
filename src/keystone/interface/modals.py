@@ -11,7 +11,8 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Input, Select, Static
 
-from ..core import AuthSummary, GatewayError, Identity, WorkspaceSession
+from ..application import WorkspaceService
+from ..domain import AuthSummary, Identity, StoreError
 
 PERMISSIONS = ["READ", "WRITE", "MANAGE"]
 
@@ -269,7 +270,7 @@ class PermissionsScreen(ModalScreen[None]):
         Binding("d,delete,x", "remove", "Remove"),
     ]
 
-    def __init__(self, session: WorkspaceSession, scope: str) -> None:
+    def __init__(self, session: WorkspaceService, scope: str) -> None:
         super().__init__()
         self._session = session
         self._scope = scope
@@ -333,7 +334,7 @@ class PermissionsScreen(ModalScreen[None]):
             await asyncio.to_thread(
                 self._session.set_acl, self._scope, principal, permission
             )
-        except GatewayError as exc:
+        except StoreError as exc:
             self.notify(f"Failed: {exc}", severity="error")
             return
         self._populate()
@@ -348,7 +349,7 @@ class PermissionsScreen(ModalScreen[None]):
     async def _remove_acl(self, principal: str) -> None:
         try:
             await asyncio.to_thread(self._session.remove_acl, self._scope, principal)
-        except GatewayError as exc:
+        except StoreError as exc:
             self.notify(f"Failed: {exc}", severity="error")
             return
         self._populate()
