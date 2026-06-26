@@ -8,6 +8,7 @@ screen's job is wiring — selections in, session calls out, results to panes.
 from __future__ import annotations
 
 import asyncio
+from functools import partial
 
 from textual import on, work
 from textual.app import ComposeResult
@@ -74,9 +75,8 @@ class MainScreen(Screen[None]):
         Binding("a", "auth", "Auth"),
         Binding("question_mark", "help", "Help"),
         # navigation — vim + arrows, fully keyboard driven
-        Binding("tab", "focus_next", "Next pane", show=False),
-        Binding("right,l", "focus_pane('right')", "Pane →", show=False),
-        Binding("left,h", "focus_pane('left')", "Pane ←", show=False),
+        Binding("tab,right,l", "focus_pane('right')", "Pane →", show=False),
+        Binding("shift+tab,left,h", "focus_pane('left')", "Pane ←", show=False),
         Binding("j,down", "vi('down')", "Down", show=False),
         Binding("k,up", "vi('up')", "Up", show=False),
         Binding("g", "jump('top')", "Top", show=False),
@@ -123,6 +123,12 @@ class MainScreen(Screen[None]):
     def detail_pane(self) -> DetailPane:
         return self.query_one(DetailPane)
 
+    @property
+    def _sess(self) -> WorkspaceSession:
+        """The active session. Callers below only run once connected."""
+        assert self.session is not None, "no active session"
+        return self.session
+
     # status-bar identity + seal indicator
     _SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
     _WARM_LINES = [
@@ -145,12 +151,12 @@ class MainScreen(Screen[None]):
             widget.update("[$text-muted]not connected · press w to sign in[/]")
             return
         dot, color = self._status_dot
-        user = self.session.identity.user_name or "—"
+        user = self._sess.identity.user_name or "—"
         seal = (
             "[b $accent]🔓 unsealed[/]" if self._revealed else "[$text-muted]🔒 sealed[/]"
         )
         widget.update(
-            f"[{color}]{dot}[/] [b]{user}[/]  ·  {self.session.label}"
+            f"[{color}]{dot}[/] [b]{user}[/]  ·  {self._sess.label}"
             f"  ·  {self._status_text}  ·  {seal}"
         )
 
@@ -192,6 +198,8 @@ class MainScreen(Screen[None]):
     @work(exclusive=True, group="connect")
     async def _warm(self) -> None:
         session = self.session
+        if session is None:
+            return
         self.current_scope = self.current_secret = self._revealed = None
         self.scopes_pane.show([])
         self.secrets_pane.clear()
@@ -230,11 +238,11 @@ class MainScreen(Screen[None]):
         self.current_scope = name
         self.current_secret = None
         self._revealed = None
-        secrets = self.session.secrets_for(name)
+        secrets = self._sess.secrets_for(name)
         self.secrets_pane.show(name, secrets)
-        scope = self.session.scope(name)
+        scope = self._sess.scope(name)
         if scope:
-            self.detail_pane.show_scope(scope, len(secrets), self.session.acls_for(name))
+            self.detail_pane.show_scope(scope, len(secrets), self._sess.acls_for(name))
         self._render_status()  # reset the seal indicator
 
     def _show_secret(self, key: str) -> None:
@@ -247,11 +255,11 @@ class MainScreen(Screen[None]):
             return
         scope, key = self.current_scope, self.current_secret
         value = (
-            self.session.cached_value(scope, key)
+            self._sess.cached_value(scope, key)
             if self._revealed == (scope, key)
             else None
         )
-        self.detail_pane.show_secret(self.session.secret(scope, key), scope, key, value)
+        self.detail_pane.show_secret(self._sess.secret(scope, key), scope, key, value)
         self._render_status()  # flip 🔒 sealed ↔ 🔓 unsealed
 
     @on(ScopesPane.Selected)
@@ -314,7 +322,7 @@ class MainScreen(Screen[None]):
     def action_auth(self) -> None:
         if self.session:
             self.app.push_screen(
-                AuthScreen(self.session.identity, self.session.auth_summary())
+                AuthScreen(self._sess.identity, self._sess.auth_summary())
             )
 
     def action_permissions(self) -> None:
@@ -323,7 +331,7 @@ class MainScreen(Screen[None]):
             return
         scope = self.current_scope
         self.app.push_screen(
-            PermissionsScreen(self.session, scope),
+            PermissionsScreen(self._sess, scope),
             lambda _: self._show_scope(scope),  # re-render ACLs after editing
         )
 
@@ -339,11 +347,11 @@ class MainScreen(Screen[None]):
     @work(group="mutate")
     async def _create_scope(self, name: str) -> None:
         try:
-            await asyncio.to_thread(self.session.create_scope, name)
+            await asyncio.to_thread(self._sess.create_scope, name)
         except GatewayError as exc:
             self.notify(f"Create scope failed: {exc}", severity="error")
             return
-        self.scopes_pane.show(self.session.scopes)
+        self.scopes_pane.show(self._sess.scopes)
         self.notify(f"🔒 Scope “{name}” created.")
 
     def action_new_secret(self) -> None:
@@ -369,7 +377,7 @@ class MainScreen(Screen[None]):
     @work(group="mutate")
     async def _put_secret(self, scope: str, key: str, value: str) -> None:
         try:
-            await asyncio.to_thread(self.session.put_secret, scope, key, value)
+            await asyncio.to_thread(self._sess.put_secret, scope, key, value)
         except GatewayError as exc:
             self.notify(f"Save failed: {exc}", severity="error")
             return
@@ -379,11 +387,11 @@ class MainScreen(Screen[None]):
 
     def action_delete(self) -> None:
         focused_id = getattr(self.focused, "id", None)
-        if focused_id == "secrets-table" and self.current_secret:
-            key = self.current_secret
+        if focused_id == "secrets-table" and self.current_scope and self.current_secret:
+            scope, key = self.current_scope, self.current_secret
             self.app.push_screen(
                 ConfirmModal("Delete secret", f"Delete secret “{key}”?"),
-                lambda ok: self._delete_secret(self.current_scope, key) if ok else None,
+                partial(self._delete_secret_if, scope, key),
             )
         elif focused_id == "scopes-list" and self.current_scope:
             name = self.current_scope
@@ -391,15 +399,23 @@ class MainScreen(Screen[None]):
                 ConfirmModal(
                     "Delete scope", f"Delete scope “{name}” and all its secrets?"
                 ),
-                lambda ok: self._delete_scope(name) if ok else None,
+                partial(self._delete_scope_if, name),
             )
         else:
             self.notify("Nothing selected to delete.")
 
+    def _delete_secret_if(self, scope: str, key: str, confirmed: bool | None) -> None:
+        if confirmed:
+            self._delete_secret(scope, key)
+
+    def _delete_scope_if(self, name: str, confirmed: bool | None) -> None:
+        if confirmed:
+            self._delete_scope(name)
+
     @work(group="mutate")
     async def _delete_secret(self, scope: str, key: str) -> None:
         try:
-            await asyncio.to_thread(self.session.delete_secret, scope, key)
+            await asyncio.to_thread(self._sess.delete_secret, scope, key)
         except GatewayError as exc:
             self.notify(f"Delete failed: {exc}", severity="error")
             return
@@ -410,11 +426,11 @@ class MainScreen(Screen[None]):
     @work(group="mutate")
     async def _delete_scope(self, name: str) -> None:
         try:
-            await asyncio.to_thread(self.session.delete_scope, name)
+            await asyncio.to_thread(self._sess.delete_scope, name)
         except GatewayError as exc:
             self.notify(f"Delete failed: {exc}", severity="error")
             return
-        self.scopes_pane.show(self.session.scopes)
+        self.scopes_pane.show(self._sess.scopes)
         self.secrets_pane.clear()
         self.notify(f"Scope “{name}” deleted.")
 
@@ -426,7 +442,7 @@ class MainScreen(Screen[None]):
         if self._revealed == target:
             self._revealed = None
             self._render_secret()
-        elif self.session.cached_value(*target) is not None:
+        elif self._sess.cached_value(*target) is not None:
             self._revealed = target
             self._render_secret()
         else:
@@ -434,8 +450,9 @@ class MainScreen(Screen[None]):
 
     @work(group="reveal")
     async def _reveal_fetch(self, target: tuple[str, str]) -> None:
+        scope, key = target
         try:
-            await asyncio.to_thread(self.session.reveal, *target)
+            await asyncio.to_thread(self._sess.reveal, scope, key)
         except GatewayError as exc:
             self.notify(f"Cannot read value: {exc}", severity="error")
             return
@@ -447,7 +464,7 @@ class MainScreen(Screen[None]):
         if not (self.session and self.current_scope and self.current_secret):
             return
         target = (self.current_scope, self.current_secret)
-        cached = self.session.cached_value(*target)
+        cached = self._sess.cached_value(*target)
         if cached is not None:
             self.app.copy_to_clipboard(cached)
             self.notify(f"📋 Copied “{target[1]}” to clipboard.")
@@ -456,8 +473,9 @@ class MainScreen(Screen[None]):
 
     @work(group="reveal")
     async def _copy_fetch(self, target: tuple[str, str]) -> None:
+        scope, key = target
         try:
-            value = await asyncio.to_thread(self.session.reveal, *target)
+            value = await asyncio.to_thread(self._sess.reveal, scope, key)
         except GatewayError as exc:
             self.notify(f"Cannot read value: {exc}", severity="error")
             return
@@ -472,10 +490,10 @@ class MainScreen(Screen[None]):
     @work(group="refresh")
     async def _refresh_scope(self, name: str) -> None:
         self._set_status(f"refreshing {name}…")
-        await asyncio.to_thread(self.session.refresh_scope, name)
+        await asyncio.to_thread(self._sess.refresh_scope, name)
         if name == self.current_scope:
             self._show_scope(name)
-        self._set_status(f"{self.session.identity.user_name} · refreshed {name}")
+        self._set_status(f"{self._sess.identity.user_name} · refreshed {name}")
 
     def action_refresh_workspace(self) -> None:
         if self.session:

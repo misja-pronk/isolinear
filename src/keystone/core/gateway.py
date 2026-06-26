@@ -129,7 +129,7 @@ class DatabricksGateway:
             raw = resp.value or ""
             try:
                 return base64.b64decode(raw).decode("utf-8")
-            except (ValueError, UnicodeDecodeError):
+            except ValueError, UnicodeDecodeError:
                 # Binary or non-utf8 secret — show the base64 form.
                 return raw
         except Exception as exc:  # noqa: BLE001

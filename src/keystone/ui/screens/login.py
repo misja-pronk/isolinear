@@ -161,7 +161,7 @@ class LoginScreen(Screen[ConnectResult | None]):
         super().__init__()
         self._profiles = profiles
         self._can_cancel = can_cancel
-        self._account = None  # live AccountClient between discover -> pick
+        self._account_client = None  # live AccountClient between discover -> pick
 
     def compose(self) -> ComposeResult:
         with Center(), Vertical(id="login-card"):
@@ -256,7 +256,7 @@ class LoginScreen(Screen[ConnectResult | None]):
         if not workspaces:
             self._status("[$accent]No workspaces found in this account.[/]")
             return
-        self._account = account
+        self._account_client = account
         self._pending_save = (account_id, save_name)
         self.app.push_screen(DiscoveredPicker(workspaces), self._after_pick)
 
@@ -269,7 +269,7 @@ class LoginScreen(Screen[ConnectResult | None]):
         self._status(f"[$accent]Connecting to {ws.name}…[/]")
         try:
             gateway, label = await asyncio.to_thread(
-                auth.connect_account_workspace, self._account, ws
+                auth.connect_account_workspace, self._account_client, ws
             )
         except auth.AuthError as exc:
             self._status(f"[$error]Connect failed:[/] {exc}")

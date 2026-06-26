@@ -3,10 +3,10 @@ name = "keystone"
 version = "0.1.0"
 description = "Keystone — a terminal Databricks secret manager"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.14"
 dependencies = [
-    "textual>=0.86",
-    "databricks-sdk>=0.30",
+    "textual>=8.2",
+    "databricks-sdk>=0.119",
 ]
 
 [project.scripts]
@@ -26,6 +26,7 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
     "ruff>=0.6",
+    "ty>=0.0.1a1",
 ]
 
 [tool.pytest.ini_options]
@@ -35,8 +36,14 @@ addopts = "-q"
 
 [tool.ruff]
 line-length = 90
-target-version = "py310"
+target-version = "py314"
 src = ["src", "tests"]
+
+[tool.ty.environment]
+python-version = "3.14"
+root = ["src"]
+# tests import sibling modules (e.g. `fakes`) the way pytest runs them
+extra-paths = ["tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]

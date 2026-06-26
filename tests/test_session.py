@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 from fakes import FakeGateway, seeded_gateway
 from keystone.core import Scope, WorkspaceSession
 
@@ -29,7 +31,7 @@ def test_warm_scope_swallows_gateway_errors():
 
 
 def test_reveal_caches_value(session: WorkspaceSession):
-    gw: FakeGateway = session._gateway  # type: ignore[attr-defined]
+    gw = cast(FakeGateway, session._gateway)
     first = session.reveal("prod", "api-key")
     second = session.reveal("prod", "api-key")
     assert first == second

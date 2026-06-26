@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 @dataclass(frozen=True)
@@ -78,7 +78,7 @@ class Secret:
     def last_updated(self) -> str:
         if not self.last_updated_ms:
             return "—"
-        dt = datetime.fromtimestamp(self.last_updated_ms / 1000, tz=timezone.utc)
+        dt = datetime.fromtimestamp(self.last_updated_ms / 1000, tz=UTC)
         return dt.strftime("%Y-%m-%d %H:%M")
 
 

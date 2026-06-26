@@ -85,15 +85,17 @@ keystone/
 
 ## Development
 
-The toolkit is **[uv](https://docs.astral.sh/uv/)** (env / deps / run) and
-**[ruff](https://docs.astral.sh/ruff/)** (lint + format). CI runs all four on
-every push (`.github/workflows/ci.yml`).
+The toolkit is all-Astral: **[uv](https://docs.astral.sh/uv/)** (env / deps / run),
+**[ruff](https://docs.astral.sh/ruff/)** (lint + format), and
+**[ty](https://docs.astral.sh/ty/)** (type check). Python is pinned to the latest
+(3.14) via `mise`. CI runs them all on every push (`.github/workflows/ci.yml`).
 
 ```sh
 uv sync                  # install incl. dev deps
 uv run pytest            # test suite (core units + UI via Textual Pilot)
 uv run ruff check .      # lint
 uv run ruff format .     # format
+uv run ty check          # type check
 uv run textual run --dev keystone.app:KeystoneApp   # run with Textual devtools
 ```
 
