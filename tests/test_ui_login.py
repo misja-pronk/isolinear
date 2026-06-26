@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from textual.widgets import Button
 
-from dbxvault.app import VaultApp
-from dbxvault.ui.screens.login import AccountModal, LoginScreen, WorkspaceUrlModal
+from keystone.app import KeystoneApp
+from keystone.ui.screens.login import AccountModal, LoginScreen, WorkspaceUrlModal
 
 
 async def test_no_profiles_lands_on_login_hub():
-    app = VaultApp(profiles=[])
+    app = KeystoneApp(profiles=[])
     async with app.run_test() as pilot:
         await pilot.pause()
         assert isinstance(app.screen, LoginScreen)
@@ -16,7 +16,7 @@ async def test_no_profiles_lands_on_login_hub():
 
 
 async def test_login_doors_open_and_close_modals():
-    app = VaultApp(profiles=[])
+    app = KeystoneApp(profiles=[])
     async with app.run_test() as pilot:
         await pilot.pause()
 

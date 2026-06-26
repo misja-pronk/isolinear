@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dbxvault.core import Scope, WorkspaceSession
 from fakes import FakeGateway, seeded_gateway
+from keystone.core import Scope, WorkspaceSession
 
 
 def test_authenticate_and_load_scopes_populate_cache():

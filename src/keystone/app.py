@@ -1,8 +1,8 @@
-"""Vault — a terminal Databricks secret manager.
+"""Keystone — a terminal Databricks secret manager.
 
 The App is deliberately thin: it installs the theme and the stylesheet and hands
 off to `MainScreen`, which owns the browsing experience. All domain logic lives
-in `dbxvault.core`; all UI in `dbxvault.ui`.
+in `keystone.core`; all UI in `keystone.ui`.
 """
 
 from __future__ import annotations
@@ -12,12 +12,12 @@ from textual.binding import Binding
 
 from .core import WorkspaceSession, discover_workspaces
 from .ui.screens.main import MainScreen
-from .ui.theme import VAULT_THEME
+from .ui.theme import KEYSTONE_THEME
 
 
-class VaultApp(App[None]):
+class KeystoneApp(App[None]):
     CSS_PATH = "styles.tcss"
-    TITLE = "Vault"
+    TITLE = "Keystone"
     BINDINGS = [Binding("q", "quit", "Quit")]
 
     def __init__(
@@ -30,8 +30,8 @@ class VaultApp(App[None]):
         self._initial_session = session
 
     def on_mount(self) -> None:
-        self.register_theme(VAULT_THEME)
-        self.theme = "vault"
+        self.register_theme(KEYSTONE_THEME)
+        self.theme = "keystone"
         profiles = (
             self._initial_profiles
             if self._initial_profiles is not None
@@ -41,7 +41,7 @@ class VaultApp(App[None]):
 
 
 def main() -> None:
-    VaultApp().run()
+    KeystoneApp().run()
 
 
 if __name__ == "__main__":

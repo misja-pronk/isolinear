@@ -1,4 +1,4 @@
-/* Vault — Databricks Secret Manager */
+/* Keystone — Databricks Secret Manager */
 
 Screen {
     background: $background;
@@ -8,17 +8,19 @@ Screen {
 /* ── top banner ─────────────────────────────────────────────── */
 #banner {
     height: 1;
-    padding: 0 1;
     background: $surface;
-    color: $primary;
-    text-style: bold;
 }
 #banner #brand {
     width: auto;
+    padding: 0 2;
+    background: $primary;
+    color: $background;
+    text-style: bold;
 }
 #banner #ws-status {
     width: 1fr;
     text-align: right;
+    padding: 0 1;
     color: $text-muted;
     text-style: none;
 }
@@ -36,18 +38,22 @@ Screen {
 .pane:focus-within {
     border: round $primary;
 }
+/* LCARS-style solid color-block header */
 .pane-title {
     dock: top;
     height: 1;
     padding: 0 1;
-    background: $panel;
-    color: $primary;
+    background: $primary;
+    color: $background;
     text-style: bold;
 }
+.pane:focus-within .pane-title {
+    background: $secondary;
+}
 
-#scopes-pane { width: 32; }
-#secrets-pane { width: 1fr; }
-#detail-pane { width: 46; }
+#scopes-pane { width: 28; }
+#secrets-pane { width: 1fr; min-width: 40; }
+#detail-pane { width: 44; }
 
 ListView {
     background: transparent;
@@ -83,23 +89,25 @@ DataTable > .datatable--header {
 #detail-body {
     padding: 1 1;
 }
-.detail-label {
-    color: $text-muted;
-}
-.detail-value {
-    color: $foreground;
-    text-style: bold;
-}
+/* the revealed secret value — a framed amber "card" */
 .secret-value {
-    background: $background;
-    border: round $border;
+    display: none;
+    background: $accent 12%;
+    border: round $accent;
     padding: 0 1;
-    margin: 1 0;
+    margin: 0 1 1 1;
     color: $accent;
 }
-.badge-read { color: $secondary; }
-.badge-write { color: $success; }
-.badge-manage { color: $accent; }
+
+/* friendly empty states */
+.empty-hint {
+    display: none;
+    height: 1fr;
+    padding: 2 2;
+    content-align: center middle;
+    text-align: center;
+    color: $text-muted;
+}
 
 /* ── modals ─────────────────────────────────────────────────── */
 ModalScreen {
@@ -108,6 +116,8 @@ ModalScreen {
 #dialog {
     width: 64;
     max-width: 90%;
+    height: auto;          /* size to content — compact card, not full screen */
+    max-height: 90%;
     padding: 1 2;
     background: $surface;
     border: thick $primary;
@@ -147,7 +157,9 @@ ModalScreen {
 }
 
 #auth-table {
-    height: 1fr;
+    height: auto;
+    max-height: 16;
+    margin-top: 1;
 }
 #acl-table {
     height: auto;
@@ -172,7 +184,12 @@ LoginScreen {
     color: $primary;
     text-align: center;
     text-style: bold;
-    margin-bottom: 1;
+}
+#login-wordmark {
+    text-align: center;
+    text-style: bold;
+    color: $secondary;
+    margin-top: 1;
 }
 #login-tagline {
     text-align: center;

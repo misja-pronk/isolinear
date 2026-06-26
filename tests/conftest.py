@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from dbxvault.core import WorkspaceSession
 from fakes import FakeGateway, seeded_gateway
+from keystone.core import WorkspaceSession
 
 
 @pytest.fixture

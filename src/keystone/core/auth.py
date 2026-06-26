@@ -117,7 +117,7 @@ def save_profile(
     parser = configparser.ConfigParser()
     if path.exists():
         parser.read(path)
-    name = name.strip() or "vault"
+    name = name.strip() or "keystone"
     if name != parser.default_section and not parser.has_section(name):
         parser.add_section(name)
     parser.set(name, "host", normalize_host(host))

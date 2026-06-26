@@ -4,7 +4,7 @@ import configparser
 
 import pytest
 
-from dbxvault.core import auth
+from keystone.core import auth
 
 
 @pytest.mark.parametrize(

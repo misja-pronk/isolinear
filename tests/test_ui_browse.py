@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from textual.widgets import ListView
 
-from dbxvault.app import VaultApp
-from dbxvault.core import WorkspaceSession
-from dbxvault.ui.screens.login import LoginScreen
-from dbxvault.ui.widgets import ScopesPane
 from fakes import seeded_gateway
+from keystone.app import KeystoneApp
+from keystone.core import WorkspaceSession
+from keystone.ui.screens.login import LoginScreen
+from keystone.ui.widgets import ScopesPane
 
 
-def _app_with_session() -> tuple[VaultApp, WorkspaceSession]:
+def _app_with_session() -> tuple[KeystoneApp, WorkspaceSession]:
     session = WorkspaceSession(seeded_gateway(), "test")
-    return VaultApp(profiles=[], session=session), session
+    return KeystoneApp(profiles=[], session=session), session
 
 
 async def test_warm_populates_scopes_and_selects_first():

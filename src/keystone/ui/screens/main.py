@@ -12,7 +12,7 @@ import asyncio
 from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.command import Hit, Hits, Provider
+from textual.command import DiscoveryHit, Hit, Hits, Provider
 from textual.containers import Horizontal
 from textual.screen import Screen
 from textual.widgets import DataTable, Footer, ListView, Static
@@ -35,8 +35,16 @@ from ..widgets import DetailPane, ScopesPane, SecretsPane
 from .login import ConnectResult, LoginScreen
 
 
-class VaultCommands(Provider):
+class KeystoneCommands(Provider):
     """Feeds every action into the command palette (ctrl+p)."""
+
+    async def discover(self) -> Hits:
+        """Shown as soon as the palette opens, before anything is typed."""
+        screen = self.screen
+        if not isinstance(screen, MainScreen):
+            return
+        for label, action in screen.command_catalog():
+            yield DiscoveryHit(label, action, help=label)
 
     async def search(self, query: str) -> Hits:
         screen = self.screen
@@ -50,7 +58,7 @@ class VaultCommands(Provider):
 
 
 class MainScreen(Screen[None]):
-    COMMANDS = {VaultCommands}
+    COMMANDS = {KeystoneCommands}
 
     BINDINGS = [
         Binding("w", "switch_workspace", "Workspace"),
@@ -82,11 +90,13 @@ class MainScreen(Screen[None]):
         self.current_scope: str | None = None
         self.current_secret: str | None = None
         self._revealed: tuple[str, str] | None = None
+        self._status_text: str = ""
+        self._status_dot: tuple[str, str] = ("●", "$success")
 
     # ── layout ─────────────────────────────────────────────────────────
     def compose(self) -> ComposeResult:
         with Horizontal(id="banner"):
-            yield Static("🔒 VAULT", id="brand")
+            yield Static("⏢ KEYSTONE", id="brand")
             yield Static("", id="ws-status")
         with Horizontal(id="body"):
             yield ScopesPane()
@@ -113,9 +123,36 @@ class MainScreen(Screen[None]):
     def detail_pane(self) -> DetailPane:
         return self.query_one(DetailPane)
 
-    def _set_status(self, text: str) -> None:
-        label = self.session.label if self.session else "—"
-        self.query_one("#ws-status", Static).update(f"{label}  ·  {text}")
+    # status-bar identity + seal indicator
+    _SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+    _WARM_LINES = [
+        "surveying the foundation",
+        "laying the courses",
+        "dressing the stone",
+        "setting the keystone",
+        "aligning isolinear chips",
+        "powering the core",
+    ]
+
+    def _set_status(self, text: str, *, dot: str = "●", color: str = "$success") -> None:
+        self._status_text = text
+        self._status_dot = (dot, color)
+        self._render_status()
+
+    def _render_status(self) -> None:
+        widget = self.query_one("#ws-status", Static)
+        if self.session is None:
+            widget.update("[$text-muted]not connected · press w to sign in[/]")
+            return
+        dot, color = self._status_dot
+        user = self.session.identity.user_name or "—"
+        seal = (
+            "[b $accent]🔓 unsealed[/]" if self._revealed else "[$text-muted]🔒 sealed[/]"
+        )
+        widget.update(
+            f"[{color}]{dot}[/] [b]{user}[/]  ·  {self.session.label}"
+            f"  ·  {self._status_text}  ·  {seal}"
+        )
 
     # ── login / onboarding ─────────────────────────────────────────────
     def action_switch_workspace(self) -> None:
@@ -159,28 +196,34 @@ class MainScreen(Screen[None]):
         self.scopes_pane.show([])
         self.secrets_pane.clear()
         self.detail_pane.clear()
-        self._set_status("connecting…")
+        self._set_status("establishing uplink…", dot="◐", color="$accent")
 
         identity = await asyncio.to_thread(session.authenticate)
         if not identity.authenticated:
-            self._set_status(f"[$error]auth failed[/] · {identity.error}")
+            self._set_status(
+                f"[$error]access denied[/] · {identity.error}", dot="○", color="$error"
+            )
             return
-        self._set_status(f"{identity.user_name} · loading scopes…")
+        self._set_status("surveying the site…", dot="◐", color="$accent")
 
         try:
             scopes = await asyncio.to_thread(session.load_scopes)
         except GatewayError as exc:
-            self._set_status(f"[$error]error[/] · {exc}")
+            self._set_status(f"[$error]{exc}[/]", dot="○", color="$error")
             return
         self.scopes_pane.show(scopes)
 
         total = len(scopes)
         for i, scope in enumerate(scopes, 1):
             await asyncio.to_thread(session.warm_scope, scope.name)
-            self._set_status(f"{identity.user_name} · warming cache {i}/{total}")
+            spin = self._SPINNER[i % len(self._SPINNER)]
+            line = self._WARM_LINES[i % len(self._WARM_LINES)]
+            self._set_status(f"{line}… {i}/{total}", dot=spin, color="$accent")
             if scope.name == self.current_scope:
                 self._show_scope(scope.name)
-        self._set_status(f"{identity.user_name} · {total} scopes ready")
+
+        plural = "scope" if total == 1 else "scopes"
+        self._set_status(f"{total} {plural} online", dot="●", color="$success")
 
     # ── selection → render ──────────────────────────────────────────────
     def _show_scope(self, name: str) -> None:
@@ -192,6 +235,7 @@ class MainScreen(Screen[None]):
         scope = self.session.scope(name)
         if scope:
             self.detail_pane.show_scope(scope, len(secrets), self.session.acls_for(name))
+        self._render_status()  # reset the seal indicator
 
     def _show_secret(self, key: str) -> None:
         self.current_secret = key
@@ -208,6 +252,7 @@ class MainScreen(Screen[None]):
             else None
         )
         self.detail_pane.show_secret(self.session.secret(scope, key), scope, key, value)
+        self._render_status()  # flip 🔒 sealed ↔ 🔓 unsealed
 
     @on(ScopesPane.Selected)
     def _on_scope_selected(self, message: ScopesPane.Selected) -> None:
@@ -299,7 +344,7 @@ class MainScreen(Screen[None]):
             self.notify(f"Create scope failed: {exc}", severity="error")
             return
         self.scopes_pane.show(self.session.scopes)
-        self.notify(f"Scope “{name}” created.")
+        self.notify(f"🔒 Scope “{name}” created.")
 
     def action_new_secret(self) -> None:
         if not (self.session and self.current_scope):
@@ -330,7 +375,7 @@ class MainScreen(Screen[None]):
             return
         if scope == self.current_scope:
             self._show_scope(scope)
-        self.notify(f"Secret “{key}” saved.")
+        self.notify(f"🔑 Secret “{key}” saved.")
 
     def action_delete(self) -> None:
         focused_id = getattr(self.focused, "id", None)
@@ -405,7 +450,7 @@ class MainScreen(Screen[None]):
         cached = self.session.cached_value(*target)
         if cached is not None:
             self.app.copy_to_clipboard(cached)
-            self.notify(f"Copied “{target[1]}” to clipboard.")
+            self.notify(f"📋 Copied “{target[1]}” to clipboard.")
         else:
             self._copy_fetch(target)
 
@@ -417,7 +462,7 @@ class MainScreen(Screen[None]):
             self.notify(f"Cannot read value: {exc}", severity="error")
             return
         self.app.copy_to_clipboard(value)
-        self.notify(f"Copied “{target[1]}” to clipboard.")
+        self.notify(f"📋 Copied “{target[1]}” to clipboard.")
 
     # ── refresh (US-15) ─────────────────────────────────────────────────
     def action_refresh_scope(self) -> None:

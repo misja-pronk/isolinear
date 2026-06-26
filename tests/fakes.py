@@ -6,8 +6,8 @@ whole stack above the SDK boundary is testable without a network.
 
 from __future__ import annotations
 
-from dbxvault.core import Acl, Identity, Scope, Secret
-from dbxvault.core.gateway import GatewayError
+from keystone.core import Acl, Identity, Scope, Secret
+from keystone.core.gateway import GatewayError
 
 
 class FakeGateway:

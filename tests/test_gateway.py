@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from dbxvault.core import Gateway
-from dbxvault.core.gateway import DatabricksGateway, GatewayError
+from keystone.core import Gateway
+from keystone.core.gateway import DatabricksGateway, GatewayError
 
 
 def _client() -> MagicMock:

@@ -22,13 +22,14 @@ from textual.widgets import Button, Input, Label, ListItem, ListView, Select, St
 
 from ...core import CLOUDS, AccountWorkspace, DatabricksGateway, Workspace, auth
 
+# An arch with its keystone (cyan) set at the crown.
 LOGO = """\
-██╗   ██╗ █████╗ ██╗   ██╗██╗  ████████╗
-██║   ██║██╔══██╗██║   ██║██║  ╚══██╔══╝
-██║   ██║███████║██║   ██║██║     ██║
-╚██╗ ██╔╝██╔══██║██║   ██║██║     ██║
- ╚████╔╝ ██║  ██║╚██████╔╝███████╗██║
-  ╚═══╝  ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝"""
+[$secondary]        ▟██▙[/]
+[$primary]      ▟█[/][$secondary]████[/][$primary]█▙[/]
+[$primary]   ▗▟█▘[/] [$secondary]██[/] [$primary]▝█▙▖[/]
+[$primary]  ▟█▀         ▀█▙[/]
+[$primary]  ██           ██[/]
+[$primary]  ██           ██[/]"""
 
 
 @dataclass
@@ -165,7 +166,12 @@ class LoginScreen(Screen[ConnectResult | None]):
     def compose(self) -> ComposeResult:
         with Center(), Vertical(id="login-card"):
             yield Static(LOGO, id="login-logo")
-            yield Static("Databricks Secret Manager", id="login-tagline")
+            yield Static("K E Y S T O N E", id="login-wordmark")
+            yield Static(
+                "[$text-muted]Databricks secret manager · "
+                "[i]the brick that holds the arch[/][/]",
+                id="login-tagline",
+            )
             if self._profiles:
                 yield Static("Saved workspaces", classes="login-section")
                 yield ListView(

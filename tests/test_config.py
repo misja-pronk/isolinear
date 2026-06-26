@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dbxvault.core import discover_workspaces
+from keystone.core import discover_workspaces
 
 
 def _write_cfg(tmp_path, body: str, monkeypatch):

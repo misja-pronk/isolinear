@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dbxvault.core import Acl, Identity, Scope, Secret, WorkspaceCache
+from keystone.core import Acl, Identity, Scope, Secret, WorkspaceCache
 
 
 def test_upsert_secret_adds_updates_and_sorts():

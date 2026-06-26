@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from dbxvault.core import Scope, Secret, Workspace, cloud_by_key, perm_rank
-from dbxvault.core.models import AccountWorkspace
+from keystone.core import Scope, Secret, Workspace, cloud_by_key, perm_rank
+from keystone.core.models import AccountWorkspace
 
 
 def test_perm_rank_orders_permissions():

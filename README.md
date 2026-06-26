@@ -1,8 +1,8 @@
-# Vault 🔒 — Databricks Secret Manager
+# Keystone ⏢ — Databricks Secret Manager
 
 A keyboard-driven terminal app for browsing and managing Databricks secrets,
 scopes, and ACLs. Superfile-inspired multi-pane layout with its own distinct
-**Vault** theme. Built with [Textual](https://textual.textualize.io) and the
+**Keystone** theme. Built with [Textual](https://textual.textualize.io) and the
 [Databricks SDK](https://github.com/databricks/databricks-sdk-py).
 
 ## Features
@@ -22,20 +22,20 @@ uv sync           # creates .venv and installs deps
 
 ## Logging in
 You do **not** need to pre-configure anything. On first launch (no usable
-profile) Vault opens an onboarding hub with two doors:
+profile) Keystone opens an onboarding hub with two doors:
 
 1. **Workspace URL** — paste a workspace URL and sign in through your browser
    (OAuth U2M / SSO). No token required.
 2. **Discover via account** — pick your cloud (AWS / Azure / GCP), paste your
-   Account ID, sign in once, and Vault lists **every workspace in the account**
+   Account ID, sign in once, and Keystone lists **every workspace in the account**
    for you to choose from.
 
-Either way you can tick *save as profile name* and Vault writes a reusable
+Either way you can tick *save as profile name* and Keystone writes a reusable
 profile to `~/.databrickscfg` (host + `auth_type = external-browser`, no secret
 stored — same as `databricks auth login`), so next launch connects instantly.
 
 ### Already have profiles?
-Vault also reads existing connection **profiles** from `~/.databrickscfg` and
+Keystone also reads existing connection **profiles** from `~/.databrickscfg` and
 shows them on the hub for one-keypress reconnect:
 
 ```ini
@@ -53,14 +53,14 @@ Press `w` anytime to switch workspace or add a new connection.
 ## Run
 
 ```sh
-uv run dbxvault
+uv run keystone
 ```
 
 ## Architecture
 Two layers with a hard boundary:
 
 ```
-dbxvault/
+keystone/
   core/          # pure domain + services — NO Textual imports
     models.py    #   plain dataclasses
     config.py    #   profile discovery
@@ -94,7 +94,7 @@ uv sync                  # install incl. dev deps
 uv run pytest            # test suite (core units + UI via Textual Pilot)
 uv run ruff check .      # lint
 uv run ruff format .     # format
-uv run textual run --dev dbxvault.app:VaultApp   # run with Textual devtools
+uv run textual run --dev keystone.app:KeystoneApp   # run with Textual devtools
 ```
 
 The `core/` layer is covered by fast unit tests; the `ui/` layer is driven

@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from textual.widgets import Input, Select
 
-from dbxvault.app import VaultApp
-from dbxvault.core import WorkspaceSession
-from dbxvault.ui.modals import AclFormModal, PermissionsScreen
 from fakes import seeded_gateway
+from keystone.app import KeystoneApp
+from keystone.core import WorkspaceSession
+from keystone.ui.modals import AclFormModal, PermissionsScreen
 
 
-def _app() -> tuple[VaultApp, WorkspaceSession]:
+def _app() -> tuple[KeystoneApp, WorkspaceSession]:
     session = WorkspaceSession(seeded_gateway(), "test")
-    return VaultApp(profiles=[], session=session), session
+    return KeystoneApp(profiles=[], session=session), session
 
 
 async def test_p_opens_permissions_for_current_scope():
