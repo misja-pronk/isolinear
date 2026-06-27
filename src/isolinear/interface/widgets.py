@@ -28,13 +28,11 @@ ACCESS_GLYPH = {
     "READ": "[$secondary]•[/]",
 }
 
-# An arch with its keystone (cyan) — greets you before anything is selected.
-ARCH = """\
-[$secondary]         ▟██▙[/]
-[$primary]      ▟█▘    ▝█▙[/]
-[$primary]    ▟█▘        ▝█▙[/]
-[$primary]   ██            ██[/]
-[$primary]   ██            ██[/]"""
+# A small isolinear-chip stack — greets you before anything is selected.
+CHIPS = """\
+[$secondary]      ▟▓▓▓▓▓▓▓▓▓▙[/]
+[$primary]      ▟▓▓▓▓▓▓▓▓▓▙[/]
+[$accent]      ▟▓▓▓▓▓▓▓▓▓▙[/]"""
 
 
 def fuzzy_match(query: str, text: str) -> bool:
@@ -265,10 +263,10 @@ class DetailPane(Vertical):
         self._unlock_timer = self.set_interval(0.03, frame)
 
     def clear(self) -> None:
-        """The 'nothing selected' state — an empty arch, standing by."""
+        """The 'nothing selected' state — chips idle, standing by."""
         self._hide_value()
         self._body(
-            ARCH
+            CHIPS
             + "\n\n[$text-muted]   Standing by.[/]"
             + "\n[$text-muted]   Select a scope to inspect.[/]"
         )

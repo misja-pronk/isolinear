@@ -23,14 +23,14 @@ from textual.widgets import Button, Input, Label, ListItem, ListView, Select, St
 from ...application import Connection, OnboardingService
 from ...domain import CLOUDS, AccountSession, AccountWorkspace, AuthError, Workspace
 
-# An arch with its keystone (cyan) set at the crown.
+# A stack of lit isolinear optical chips, LCARS colours.
 LOGO = """\
-[$secondary]        ▟██▙[/]
-[$primary]      ▟█[/][$secondary]████[/][$primary]█▙[/]
-[$primary]   ▗▟█▘[/] [$secondary]██[/] [$primary]▝█▙▖[/]
-[$primary]  ▟█▀         ▀█▙[/]
-[$primary]  ██           ██[/]
-[$primary]  ██           ██[/]"""
+[$secondary]   ▟▓▓▓▓▓▓▓▓▓▓▓▓▙[/]
+[$secondary]   ▜▓▓▓▓▓▓▓▓▓▓▓▓▛[/]
+[$primary]   ▟▓▓▓▓▓▓▓▓▓▓▓▓▙[/]
+[$primary]   ▜▓▓▓▓▓▓▓▓▓▓▓▓▛[/]
+[$accent]   ▟▓▓▓▓▓▓▓▓▓▓▓▓▙[/]
+[$accent]   ▜▓▓▓▓▓▓▓▓▓▓▓▓▛[/]"""
 
 
 @dataclass
@@ -170,10 +170,10 @@ class LoginScreen(Screen[ConnectResult | None]):
     def compose(self) -> ComposeResult:
         with Center(), Vertical(id="login-card"):
             yield Static(LOGO, id="login-logo")
-            yield Static("K E Y S T O N E", id="login-wordmark")
+            yield Static("I S O L I N E A R", id="login-wordmark")
             yield Static(
                 "[$text-muted]Databricks secret manager · "
-                "[i]the brick that holds the arch[/][/]",
+                "[i]optical storage for your secrets[/][/]",
                 id="login-tagline",
             )
             if self._profiles:

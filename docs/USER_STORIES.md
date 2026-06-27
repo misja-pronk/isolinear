@@ -1,7 +1,7 @@
-# Keystone — Databricks Secret Manager · User Stories
+# Isolinear — Databricks Secret Manager · User Stories
 
 A keyboard-driven terminal app for managing Databricks secrets. Superfile-inspired
-multi-pane layout with its own distinct "Keystone" theme. Built with Python, Textual,
+multi-pane layout with its own distinct "Isolinear" theme. Built with Python, Textual,
 and the Databricks SDK.
 
 > **Workspace** in this app = a connection profile in `~/.databrickscfg`.
@@ -51,7 +51,7 @@ and the Databricks SDK.
 ## Epic 6 — Look & feel
 | ID | Story | Acceptance |
 |----|-------|-----------|
-| US-17 | Distinct "Keystone" theme. | Violet-cyber LCARS palette, arch/keystone motif, multi-pane. |
+| US-17 | Distinct "Isolinear" theme. | Violet-cyber LCARS palette, isolinear-chip motif, multi-pane. |
 | US-18 | Keyboard-driven with footer + help overlay. | Footer bindings; `?` help screen. |
 
 ---

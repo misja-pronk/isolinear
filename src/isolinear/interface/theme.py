@@ -1,4 +1,4 @@
-"""The 'Keystone' theme — violet-cyber, after the Star Trek LCARS palette.
+"""The 'Isolinear' theme — violet-cyber, after the Star Trek LCARS palette.
 
 Electric violet on near-black ink, cyan as the live/seal accent, amber for
 caution. Construction-meets-starship.
@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from textual.theme import Theme
 
-KEYSTONE_THEME = Theme(
-    name="keystone",
+ISOLINEAR_THEME = Theme(
+    name="isolinear",
     primary="#7c5cff",  # electric violet — LCARS panels / active accent
     secondary="#29e0c4",  # cyan — live / unsealed / highlights
     accent="#ff9f1c",  # amber — caution / locked
@@ -34,8 +34,8 @@ KEYSTONE_THEME = Theme(
 )
 
 # LCARS amber — the classic Okudagram orange/blue on black.
-KEYSTONE_AMBER = Theme(
-    name="keystone-amber",
+ISOLINEAR_AMBER = Theme(
+    name="isolinear-amber",
     primary="#ff9f43",  # LCARS amber
     secondary="#6bb6ff",  # LCARS blue
     accent="#ffd166",
@@ -58,8 +58,8 @@ KEYSTONE_AMBER = Theme(
 )
 
 # Phosphor green — a spare retro-terminal look.
-KEYSTONE_PHOSPHOR = Theme(
-    name="keystone-phosphor",
+ISOLINEAR_PHOSPHOR = Theme(
+    name="isolinear-phosphor",
     primary="#5ad27a",
     secondary="#9ad29a",
     accent="#d7d77a",
@@ -81,4 +81,4 @@ KEYSTONE_PHOSPHOR = Theme(
     },
 )
 
-KEYSTONE_THEMES = [KEYSTONE_THEME, KEYSTONE_AMBER, KEYSTONE_PHOSPHOR]
+ISOLINEAR_THEMES = [ISOLINEAR_THEME, ISOLINEAR_AMBER, ISOLINEAR_PHOSPHOR]

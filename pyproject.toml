@@ -1,24 +1,59 @@
 [project]
-name = "keystone"
+name = "isolinear"
 version = "0.1.0"
-description = "Keystone — a terminal Databricks secret manager"
+description = "A keyboard-driven terminal UI for managing Databricks secrets"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Misja Pronk", email = "misja@prorexconsultancy.nl" }]
+keywords = [
+    "databricks",
+    "secrets",
+    "secret-manager",
+    "tui",
+    "terminal",
+    "textual",
+    "cli",
+    "security",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Security",
+    "Topic :: Terminals",
+    "Topic :: Utilities",
+    "Typing :: Typed",
+]
 dependencies = [
-    "textual>=8.2",
-    "databricks-sdk>=0.119",
+    "textual>=2.0",
+    "databricks-sdk>=0.30",
 ]
 
+[project.urls]
+Homepage = "https://github.com/misja-pronk/isolinear"
+Repository = "https://github.com/misja-pronk/isolinear"
+Issues = "https://github.com/misja-pronk/isolinear/issues"
+Changelog = "https://github.com/misja-pronk/isolinear/blob/main/CHANGELOG.md"
+
 [project.scripts]
-keystone = "keystone.app:main"
-ks = "keystone.app:main"
+isolinear = "isolinear.app:main"
+iso = "isolinear.app:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/keystone"]
+packages = ["src/isolinear"]
 
 [dependency-groups]
 dev = [
@@ -36,11 +71,11 @@ addopts = "-q"
 
 [tool.ruff]
 line-length = 90
-target-version = "py314"
+target-version = "py311"
 src = ["src", "tests"]
 
 [tool.ty.environment]
-python-version = "3.14"
+python-version = "3.11"
 root = ["src"]
 # tests import sibling modules (e.g. `fakes`) the way pytest runs them
 extra-paths = ["tests"]

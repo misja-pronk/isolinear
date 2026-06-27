@@ -3,14 +3,14 @@ from __future__ import annotations
 from textual.widgets import Input, Select
 
 from fakes import seeded_store, stub_onboarding
-from keystone.app import KeystoneApp
-from keystone.application import WorkspaceService
-from keystone.interface.modals import AclFormModal, PermissionsScreen
+from isolinear.app import IsolinearApp
+from isolinear.application import WorkspaceService
+from isolinear.interface.modals import AclFormModal, PermissionsScreen
 
 
-def _app() -> tuple[KeystoneApp, WorkspaceService]:
+def _app() -> tuple[IsolinearApp, WorkspaceService]:
     session = WorkspaceService(seeded_store(), "test")
-    return KeystoneApp(onboarding=stub_onboarding(), session=session), session
+    return IsolinearApp(onboarding=stub_onboarding(), session=session), session
 
 
 async def test_p_opens_permissions_for_current_scope():

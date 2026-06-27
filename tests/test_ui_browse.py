@@ -5,16 +5,16 @@ from typing import cast
 from textual.widgets import DataTable, ListView
 
 from fakes import seeded_store, stub_onboarding
-from keystone.app import KeystoneApp
-from keystone.application import WorkspaceService
-from keystone.interface.screens.login import LoginScreen
-from keystone.interface.screens.main import MainScreen
-from keystone.interface.widgets import ScopesPane
+from isolinear.app import IsolinearApp
+from isolinear.application import WorkspaceService
+from isolinear.interface.screens.login import LoginScreen
+from isolinear.interface.screens.main import MainScreen
+from isolinear.interface.widgets import ScopesPane
 
 
-def _app_with_session() -> tuple[KeystoneApp, WorkspaceService]:
+def _app_with_session() -> tuple[IsolinearApp, WorkspaceService]:
     session = WorkspaceService(seeded_store(), "test")
-    return KeystoneApp(onboarding=stub_onboarding(), session=session), session
+    return IsolinearApp(onboarding=stub_onboarding(), session=session), session
 
 
 async def test_warm_populates_scopes_and_selects_first():

@@ -1,133 +1,132 @@
-# Keystone ⏢ — Databricks Secret Manager
+# Isolinear ▦
 
-A keyboard-driven terminal app for browsing and managing Databricks secrets,
-scopes, and ACLs. Superfile-inspired multi-pane layout with its own distinct
-**Keystone** theme. Built with [Textual](https://textual.textualize.io) and the
-[Databricks SDK](https://github.com/databricks/databricks-sdk-py).
+**A keyboard-driven terminal UI for managing Databricks secrets.**
+Browse workspaces, scopes, secrets and ACLs; create / edit / delete; reveal &
+copy values — all from a fast, LCARS-flavoured TUI.
 
-## Features
-- Browse workspaces (profiles), scopes, and secrets in a fast multi-pane UI
-- Create / update / delete secrets and scopes
-- Reveal & copy secret values to the clipboard
-- Authorization overview (identity + per-scope ACLs)
-- Pre-loads & caches everything on startup for an instant experience
+[![ci](https://github.com/misja-pronk/isolinear/actions/workflows/ci.yml/badge.svg)](https://github.com/misja-pronk/isolinear/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/isolinear.svg)](https://pypi.org/project/isolinear/)
+[![Python](https://img.shields.io/pypi/pyversions/isolinear.svg)](https://pypi.org/project/isolinear/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-## Requirements
-Tooling is pinned via [`mise`](https://mise.jdx.dev) + [`uv`](https://docs.astral.sh/uv/).
+![Isolinear browsing secrets](docs/img/browse.png)
+
+## Install
+
+Run it with [uv](https://docs.astral.sh/uv/) — no clone, no virtualenv:
 
 ```sh
-mise install      # installs python 3.12 + uv
-uv sync           # creates .venv and installs deps
+uvx isolinear              # run once, ephemerally
+uv tool install isolinear  # install the `isolinear` (and `iso`) commands on PATH
 ```
 
-## Logging in
-You do **not** need to pre-configure anything. On first launch (no usable
-profile) Keystone opens an onboarding hub with two doors:
+Or with pipx: `pipx run isolinear` / `pipx install isolinear`.
+
+> Requires Python ≥ 3.11. Built with [Textual](https://textual.textualize.io)
+> and the [Databricks SDK](https://github.com/databricks/databricks-sdk-py).
+
+## Quickstart
+
+```sh
+isolinear        # or: iso
+```
+
+You **don't** need to pre-configure anything. On first launch Isolinear opens an
+onboarding hub with two doors:
 
 1. **Workspace URL** — paste a workspace URL and sign in through your browser
    (OAuth U2M / SSO). No token required.
 2. **Discover via account** — pick your cloud (AWS / Azure / GCP), paste your
-   Account ID, sign in once, and Keystone lists **every workspace in the account**
-   for you to choose from.
+   Account ID, sign in once, and Isolinear lists **every workspace in the
+   account** for you to choose from.
 
-Either way you can tick *save as profile name* and Keystone writes a reusable
-profile to `~/.databrickscfg` (host + `auth_type = external-browser`, no secret
-stored — same as `databricks auth login`), so next launch connects instantly.
+Tick *save as profile* and it writes a reusable entry to `~/.databrickscfg`
+(host + `auth_type = external-browser`, **no secret stored** — same as
+`databricks auth login`), so next launch connects instantly. Existing
+`~/.databrickscfg` profiles show up automatically.
 
-### Already have profiles?
-Keystone also reads existing connection **profiles** from `~/.databrickscfg` and
-shows them on the hub for one-keypress reconnect:
+<table>
+  <tr>
+    <td><img src="docs/img/login.png" alt="Login hub"></td>
+    <td><img src="docs/img/auth.png" alt="Authorization overview"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Onboarding hub</sub></td>
+    <td align="center"><sub>Authorization overview</sub></td>
+  </tr>
+</table>
 
-```ini
-[prod]
-host  = https://my-workspace.cloud.databricks.com
-token = dapi...
+## Features
 
-[staging]
-host      = https://staging.cloud.databricks.com
-auth_type = external-browser
-```
-
-Press `w` anytime to switch workspace or add a new connection.
-
-## Run
-
-```sh
-uv run keystone
-```
-
-## Architecture
-Hexagonal / DDD. Dependencies point inward; **all I/O is behind domain ports**,
-and the UI never touches infrastructure (`interface → application → domain ←
-infrastructure`):
-
-```
-keystone/
-  domain/                # the model, rules + ports — pure (no Textual/SDK/asyncio)
-    models.py            #   Scope / Secret / Acl / Identity / Workspace …
-    permissions.py       #   perm ranking + authorization_summary (US-13)
-    host.py              #   normalize_host (a small rule)
-    secret_store.py      #   SecretStore  — repository port
-    ports.py             #   WorkspaceConnector / AccountSession / ProfileStore
-    errors.py            #   StoreError / AuthError
-  application/           # use-cases / orchestration (depends on domain only)
-    workspace.py         #   WorkspaceService — secret-management use-cases
-    onboarding.py        #   OnboardingService — login/discovery use-cases
-    read_model.py        #   WorkspaceCache — in-memory projection the UI renders
-  infrastructure/        # adapters implementing the ports (only SDK importers)
-    databricks.py        #   DatabricksSecretStore  (SecretStore)
-    connector.py         #   DatabricksConnector    (WorkspaceConnector)
-    profiles.py          #   DatabricksCfgProfileStore (ProfileStore)
-    config.py            #   config-file location
-  interface/             # Textual presentation — NO business logic, NO infra
-    theme.py  widgets.py  modals.py  screens/
-  app.py                 # composition root: build adapters → wire → run
-```
-
-- **Ports & adapters:** the domain defines `SecretStore`, `WorkspaceConnector`,
-  and `ProfileStore` as `Protocol`s; infrastructure implements them. Nothing
-  outside `infrastructure/` imports the Databricks SDK.
-- **The UI depends only on `application` + `domain`.** It talks to
-  `WorkspaceService` / `OnboardingService`; `app.py` injects the concrete
-  adapters. Tests inject in-memory fakes.
-- **The domain stays pure:** authorization rules live in `domain/permissions.py`,
-  not on the cache; the cache is a plain read-model projection.
-
-## Development
-
-The toolkit is all-Astral: **[uv](https://docs.astral.sh/uv/)** (env / deps / run),
-**[ruff](https://docs.astral.sh/ruff/)** (lint + format), and
-**[ty](https://docs.astral.sh/ty/)** (type check). Python is pinned to the latest
-(3.14) via `mise`. CI runs them all on every push (`.github/workflows/ci.yml`).
-
-```sh
-uv sync                  # install incl. dev deps
-uv run pytest            # test suite (core units + UI via Textual Pilot)
-uv run ruff check .      # lint
-uv run ruff format .     # format
-uv run ty check          # type check
-uv run textual run --dev keystone.app:KeystoneApp   # run with Textual devtools
-```
-
-The `core/` layer is covered by fast unit tests; the `ui/` layer is driven
-through Textual's `Pilot` harness with a fake gateway (no network).
+- **Three-pane browser** — scopes (with secret counts + your access), secrets
+  (with relative age), and a detail pane.
+- **Reveal & copy** secret values; values are fetched lazily on reveal and never
+  bulk-pulled into memory.
+- **Full CRUD** — create / edit / delete secrets, create / delete scopes,
+  manage scope **permissions (ACLs)**.
+- **Authorization overview** — your effective permission on every scope.
+- **Fuzzy filter** (`/`), **command palette** (`ctrl+p`), vim + arrow navigation.
+- **Multiple workspaces** — switch profiles, or add new connections on the fly.
+- **Pre-loads & caches** everything on startup for an instant experience.
+- Three switchable themes (violet, amber Okudagram, phosphor green).
 
 ## Keys
+
 Everything is keyboard driven. Press `?` for the in-app cheat-sheet or `ctrl+p`
 for the fuzzy command palette.
 
 | Key | Action |
 |-----|--------|
 | `↑↓` / `j` `k` | Move within a pane |
-| `←→` / `h` `l` | Move between panes |
-| `tab` · `enter` | Next pane · drill scope → secrets |
+| `←→` / `h` `l` · `tab` | Move between panes |
 | `g` / `G` | Jump to top / bottom |
+| `/` | Filter the focused pane |
 | `n` / `N` | New secret / new scope |
-| `e` | Edit secret value |
-| `d` | Delete secret/scope (with confirm) |
+| `e` · `d` | Edit secret · delete (with confirm) |
 | `p` | Manage scope permissions (ACLs) |
-| `space` · `c` | Reveal value · copy value |
+| `space` · `c` | Reveal / hide value · copy value |
 | `r` / `R` | Refresh scope / workspace |
 | `a` | Authorization overview |
 | `w` · `ctrl+p` | Switch workspace · command palette |
 | `?` · `q` | Help · quit |
+
+## Security
+
+Isolinear talks to Databricks through the official SDK's unified auth. It does
+**not** store secret *values* — they're read on demand and kept only in memory.
+Saved profiles contain a host + `auth_type`, never a token. See
+[SECURITY.md](SECURITY.md) for details and how to report a vulnerability.
+
+## How it's built
+
+Hexagonal / DDD layers; dependencies point inward and **all I/O is behind domain
+ports**, so the UI never touches the SDK and the whole domain is unit-testable
+without a network:
+
+```
+isolinear/
+  domain/          model, rules + ports (SecretStore, WorkspaceConnector, ProfileStore)
+  application/     use-cases (WorkspaceService, OnboardingService) + read model
+  infrastructure/  adapters — the only Databricks-SDK importers
+  interface/       Textual presentation (no business logic, no infra)
+  app.py           composition root
+```
+
+## Contributing
+
+Issues and PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). The toolkit is
+all-[Astral](https://astral.sh): **uv** (env/deps/run), **ruff** (lint+format),
+**ty** (types).
+
+```sh
+uv sync
+uv run pytest        # tests (core units + UI via Textual Pilot)
+uv run ruff check .  # lint
+uv run ty check      # types
+uv run isolinear     # run it
+```
+
+## License
+
+[MIT](LICENSE) © Misja Pronk

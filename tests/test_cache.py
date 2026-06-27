@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from keystone.application import WorkspaceCache
-from keystone.domain import Scope, Secret
+from isolinear.application import WorkspaceCache
+from isolinear.domain import Scope, Secret
 
 
 def test_upsert_secret_adds_updates_and_sorts():

@@ -1,0 +1,41 @@
+name: Bug report
+description: Something isn't working
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Run `isolinear`
+        2. ...
+  - type: input
+    id: version
+    attributes:
+      label: Isolinear version
+      placeholder: "0.1.0  (uvx isolinear --version, or `uv tool list`)"
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      placeholder: "3.12"
+  - type: input
+    id: os
+    attributes:
+      label: OS / terminal
+      placeholder: "macOS 15 · iTerm2"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error output
+      description: >
+        The TUI takes over the screen, so capture stderr with
+        `isolinear 2>err.log` and paste `err.log` here.
+      render: text

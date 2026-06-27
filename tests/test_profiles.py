@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import configparser
 
-from keystone.infrastructure import DatabricksCfgProfileStore
+from isolinear.infrastructure import DatabricksCfgProfileStore
 
 
 def _store(tmp_path, monkeypatch, body: str = ""):

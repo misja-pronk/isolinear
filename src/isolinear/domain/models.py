@@ -1,4 +1,4 @@
-"""Domain model — the ubiquitous language of Keystone as plain value objects.
+"""Domain model — the ubiquitous language of Isolinear as plain value objects.
 
 No Textual, no Databricks SDK, no I/O. These are the nouns the whole app speaks:
 workspaces, scopes, secrets, ACLs, identity.

@@ -3,12 +3,12 @@ from __future__ import annotations
 from textual.widgets import Button
 
 from fakes import stub_onboarding
-from keystone.app import KeystoneApp
-from keystone.interface.screens.login import AccountModal, LoginScreen, WorkspaceUrlModal
+from isolinear.app import IsolinearApp
+from isolinear.interface.screens.login import AccountModal, LoginScreen, WorkspaceUrlModal
 
 
 async def test_no_profiles_lands_on_login_hub():
-    app = KeystoneApp(onboarding=stub_onboarding())
+    app = IsolinearApp(onboarding=stub_onboarding())
     async with app.run_test() as pilot:
         await pilot.pause()
         assert isinstance(app.screen, LoginScreen)
@@ -17,7 +17,7 @@ async def test_no_profiles_lands_on_login_hub():
 
 
 async def test_login_doors_open_and_close_modals():
-    app = KeystoneApp(onboarding=stub_onboarding())
+    app = IsolinearApp(onboarding=stub_onboarding())
     async with app.run_test() as pilot:
         await pilot.pause()
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from keystone.domain import AuthError, normalize_host
+from isolinear.domain import AuthError, normalize_host
 
 
 @pytest.mark.parametrize(

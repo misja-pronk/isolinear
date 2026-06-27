@@ -32,7 +32,7 @@ from ..widgets import DetailPane, ScopeRow, ScopesPane, SecretsPane
 from .login import ConnectResult, LoginScreen
 
 
-class KeystoneCommands(Provider):
+class IsolinearCommands(Provider):
     """Feeds every action into the command palette (ctrl+p)."""
 
     async def discover(self) -> Hits:
@@ -55,7 +55,7 @@ class KeystoneCommands(Provider):
 
 
 class MainScreen(Screen[None]):
-    COMMANDS = {KeystoneCommands}
+    COMMANDS = {IsolinearCommands}
 
     BINDINGS = [
         Binding("w", "switch_workspace", "Workspace"),
@@ -98,7 +98,7 @@ class MainScreen(Screen[None]):
     # ── layout ─────────────────────────────────────────────────────────
     def compose(self) -> ComposeResult:
         with Horizontal(id="banner"):
-            yield Static("⏢ KEYSTONE", id="brand")
+            yield Static("▦ ISOLINEAR", id="brand")
             yield Static("", id="breadcrumb")
             yield Static("", id="ws-status")
         with Horizontal(id="body"):
@@ -136,12 +136,12 @@ class MainScreen(Screen[None]):
     # status-bar identity + seal indicator
     _SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
     _WARM_LINES = [
-        "surveying the foundation",
-        "laying the courses",
-        "dressing the stone",
-        "setting the keystone",
-        "aligning isolinear chips",
-        "powering the core",
+        "initializing isolinear core",
+        "aligning the chips",
+        "indexing optical storage",
+        "running level-1 diagnostic",
+        "establishing subspace link",
+        "powering the matrix",
     ]
 
     def _set_status(self, text: str, *, dot: str = "●", color: str = "$success") -> None:
@@ -281,7 +281,7 @@ class MainScreen(Screen[None]):
         self.secrets_pane.clear()
         self.detail_pane.clear()
         self._render_breadcrumb()
-        self._set_status("establishing uplink…", dot="◐", color="$accent")
+        self._set_status("establishing subspace link…", dot="◐", color="$accent")
 
         identity = await asyncio.to_thread(session.authenticate)
         if not identity.authenticated:
@@ -289,7 +289,7 @@ class MainScreen(Screen[None]):
                 f"[$error]access denied[/] · {identity.error}", dot="○", color="$error"
             )
             return
-        self._set_status("surveying the site…", dot="◐", color="$accent")
+        self._set_status("scanning the array…", dot="◐", color="$accent")
 
         try:
             scopes = await asyncio.to_thread(session.load_scopes)

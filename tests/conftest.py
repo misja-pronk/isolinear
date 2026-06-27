@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from fakes import FakeSecretStore, seeded_store
-from keystone.application import WorkspaceService
+from isolinear.application import WorkspaceService
 
 
 @pytest.fixture

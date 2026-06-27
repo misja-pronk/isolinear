@@ -6,9 +6,9 @@ without a network.
 
 from __future__ import annotations
 
-from keystone.application import OnboardingService
-from keystone.domain import Acl, Identity, Scope, Secret
-from keystone.domain.errors import StoreError
+from isolinear.application import OnboardingService
+from isolinear.domain import Acl, Identity, Scope, Secret
+from isolinear.domain.errors import StoreError
 
 
 class FakeSecretStore:

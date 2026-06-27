@@ -6,27 +6,54 @@ on:
   pull_request:
 
 jobs:
-  check:
+  lint:
+    name: lint + types
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-
-      - name: Sync dependencies
-        run: uv sync
-
+      - run: uv sync
       - name: Lint (ruff)
         run: uv run ruff check .
-
       - name: Format check (ruff)
         run: uv run ruff format --check .
-
       - name: Type check (ty)
         run: uv run ty check
 
+  test:
+    name: test (py${{ matrix.python-version }} · ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+        include:
+          - os: macos-latest
+            python-version: "3.14"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
       - name: Tests (pytest)
-        run: uv run pytest
+        run: uv run --python ${{ matrix.python-version }} pytest
+
+  build:
+    name: build (wheel + sdist)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv build
+      - name: Smoke-test the built wheel on 3.11
+        run: |
+          uv venv /tmp/smoke -p 3.11
+          uv pip install --python /tmp/smoke/bin/python dist/*.whl
+          /tmp/smoke/bin/python -c "import isolinear.app; print('import OK')"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*

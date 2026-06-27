@@ -1,4 +1,4 @@
-/* Keystone — Databricks Secret Manager */
+/* Isolinear — Databricks Secret Manager */
 
 Screen {
     background: $background;
