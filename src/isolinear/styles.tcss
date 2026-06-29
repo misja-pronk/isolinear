@@ -30,6 +30,40 @@ Footer > .footer-key--description {
     color: $text-muted;
 }
 
+/* buttons — flat & compact, not Textual's default raised 3-row chip */
+Button {
+    height: 1;
+    min-width: 12;
+    border: none;
+    padding: 0 2;
+    margin: 0;
+    background: $panel;
+    color: $foreground;
+}
+Button:hover {
+    background: $primary 25%;
+}
+Button:focus {
+    background: $primary 40%;
+    text-style: bold;
+}
+Button.-primary {
+    background: $primary;
+    color: $background;
+    text-style: bold;
+}
+Button.-primary:focus {
+    background: $primary-lighten-1;
+}
+Button.-error {
+    background: $error;
+    color: $background;
+    text-style: bold;
+}
+Button.-error:focus {
+    background: $error-lighten-1;
+}
+
 /* ── top bar ─────────────────────────────────────────────────── */
 #banner {
     height: 1;
@@ -71,7 +105,7 @@ Footer > .footer-key--description {
 .pane {
     border: round $border;
     height: 1fr;
-    padding: 0 1;
+    padding: 1 1 0 1;
     margin-right: 2;
 }
 #detail-pane {
@@ -181,7 +215,7 @@ ModalScreen {
 }
 #dialog .buttons {
     align-horizontal: right;
-    height: 3;
+    height: auto;
     margin-top: 1;
 }
 #dialog Button {
@@ -216,7 +250,7 @@ LoginScreen {
     align: center middle;
 }
 #login-card {
-    width: 64;
+    width: 72;
     max-width: 92%;
     height: auto;
     padding: 2 4;
@@ -249,11 +283,12 @@ LoginScreen {
     margin-top: 1;
 }
 #login-actions {
-    height: 3;
+    height: 1;
     margin-top: 1;
     align-horizontal: center;
 }
 #login-actions Button {
+    min-width: 0;
     margin: 0 1;
 }
 #login-status {
