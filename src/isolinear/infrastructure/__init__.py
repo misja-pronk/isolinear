@@ -5,12 +5,14 @@ Implements the domain's ports (`SecretStore`, `WorkspaceConnector`,
 concrete adapters into the application + UI.
 """
 
+from .bundle import DatabricksBundleStore
 from .config import config_path
 from .connector import DatabricksConnector
 from .databricks import DatabricksSecretStore
 from .profiles import DatabricksCfgProfileStore
 
 __all__ = [
+    "DatabricksBundleStore",
     "DatabricksCfgProfileStore",
     "DatabricksConnector",
     "DatabricksSecretStore",

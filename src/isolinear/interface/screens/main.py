@@ -86,7 +86,7 @@ class MainScreen(Screen[None]):
     ) -> None:
         super().__init__()
         self._onboarding = onboarding
-        self.profiles = onboarding.saved_workspaces()
+        self.workspaces = onboarding.available_workspaces()
         self.session = session
         self.current_scope: str | None = None
         self.current_secret: str | None = None
@@ -217,7 +217,7 @@ class MainScreen(Screen[None]):
     def open_login(self) -> None:
         self.app.push_screen(
             LoginScreen(
-                self.profiles, self._onboarding, can_cancel=self.session is not None
+                self.workspaces, self._onboarding, can_cancel=self.session is not None
             ),
             self._on_login_result,
         )
@@ -225,7 +225,7 @@ class MainScreen(Screen[None]):
     def _on_login_result(self, result: ConnectResult | None) -> None:
         if result is None:
             if self.session is None:
-                self._set_status("not connected · press w to sign in")
+                self._render_status()
             return
         if result.save and result.connection.host:
             self._persist_profile(result)
@@ -236,12 +236,11 @@ class MainScreen(Screen[None]):
         conn = result.connection
         try:
             await asyncio.to_thread(
-                self._onboarding.save_profile,
-                result.save_name,
-                conn.host,
-                conn.account_id,
+                self._onboarding.save_profile, result.save_name, conn.host
             )
-            self.profiles = await asyncio.to_thread(self._onboarding.saved_workspaces)
+            self.workspaces = await asyncio.to_thread(
+                self._onboarding.available_workspaces
+            )
             self.notify(f"Saved profile “{result.save_name}”.")
         except Exception as exc:  # noqa: BLE001
             self.notify(f"Could not save profile: {exc}", severity="error")

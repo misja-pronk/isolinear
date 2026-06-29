@@ -19,12 +19,15 @@ sys.path.insert(0, os.path.join(HERE, "..", "..", "tests"))
 from fakes import seeded_store, stub_onboarding  # noqa: E402
 from isolinear.app import IsolinearApp  # noqa: E402
 from isolinear.application import WorkspaceService  # noqa: E402
+from isolinear.domain import SOURCE_BUNDLE, Workspace  # noqa: E402
 
 SIZE = (112, 34)
 
 
-async def shot(name: str, steps: list[str], *, with_session: bool = True) -> None:
-    onboarding = stub_onboarding()
+async def shot(
+    name: str, steps: list[str], *, with_session: bool = True, onboarding=None
+) -> None:
+    onboarding = onboarding or stub_onboarding()
     session = WorkspaceService(seeded_store(), "prod-account") if with_session else None
     app = IsolinearApp(onboarding=onboarding, session=session)
     async with app.run_test(size=SIZE) as pilot:
@@ -60,8 +63,20 @@ async def main() -> None:
     await shot("after-permissions.svg", ["j", "p"])
     # delete confirm for a secret
     await shot("after-confirm.svg", ["j", "tab", "d"])
-    # login / onboarding hub
-    await shot("after-login.svg", [], with_session=False)
+    # login / onboarding hub — a bundle (default) plus ~/.databrickscfg profiles
+    login = stub_onboarding(
+        profiles=[
+            Workspace(profile="prod", host="https://prod.cloud.databricks.com"),
+            Workspace(profile="staging", host="https://staging.cloud.databricks.com"),
+        ],
+        bundle=Workspace(
+            host="https://acme-dev.cloud.databricks.com",
+            source=SOURCE_BUNDLE,
+            target="acme-platform",
+            default=True,
+        ),
+    )
+    await shot("after-login.svg", [], with_session=False, onboarding=login)
 
 
 if __name__ == "__main__":

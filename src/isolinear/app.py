@@ -13,7 +13,11 @@ from textual.app import App
 from textual.binding import Binding
 
 from .application import OnboardingService, WorkspaceService
-from .infrastructure import DatabricksCfgProfileStore, DatabricksConnector
+from .infrastructure import (
+    DatabricksBundleStore,
+    DatabricksCfgProfileStore,
+    DatabricksConnector,
+)
 from .interface.screens.main import MainScreen
 from .interface.theme import ISOLINEAR_THEMES
 
@@ -37,7 +41,9 @@ class IsolinearApp(App[None]):
             self.register_theme(theme)
         self.theme = "isolinear"
         onboarding = self._onboarding or OnboardingService(
-            DatabricksConnector(), DatabricksCfgProfileStore()
+            DatabricksConnector(),
+            DatabricksCfgProfileStore(),
+            DatabricksBundleStore(),
         )
         self.push_screen(MainScreen(onboarding, self._initial_session))
 

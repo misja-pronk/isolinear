@@ -36,6 +36,7 @@ classifiers = [
 dependencies = [
     "textual>=2.0",
     "databricks-sdk>=0.30",
+    "pyyaml>=6.0.3",
 ]
 
 [project.urls]
@@ -62,6 +63,7 @@ dev = [
     "pytest-asyncio>=0.24",
     "ruff>=0.6",
     "ty>=0.0.1a1",
+    "types-pyyaml>=6.0.12.20260518",
 ]
 
 [tool.pytest.ini_options]

@@ -257,6 +257,15 @@ LoginScreen {
     border: round $border;
     background: $surface;
 }
+/* wider when showing the workspaces table */
+#login-card.browse {
+    width: 92;
+}
+#ws-table {
+    height: auto;
+    max-height: 12;
+    margin-top: 1;
+}
 #login-wordmark {
     text-align: center;
     text-style: bold;
