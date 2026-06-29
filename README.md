@@ -32,33 +32,37 @@ Or with pipx: `pipx run isolinear` / `pipx install isolinear`.
 isolinear        # or: iso
 ```
 
-You **don't** need to pre-configure anything. On first launch Isolinear opens an
-onboarding hub with two doors:
+You **don't** need to pre-configure anything. Isolinear opens a **workspace
+picker** that gathers connection targets from three places — each row labelled
+with its **Source**, so you always know where it came from:
 
-1. **Workspace URL** — paste a workspace URL and sign in through your browser
-   (OAuth U2M / SSO). No token required.
-2. **Discover via account** — pick your cloud (AWS / Azure / GCP), paste your
-   Account ID, sign in once, and Isolinear lists **every workspace in the
-   account** for you to choose from.
+1. **Asset bundle** — if a `databricks.yml` (Databricks Asset Bundle) sits in the
+   current directory, its target workspace is offered as the **default**,
+   pre-selected so you connect with a single keystroke.
+2. **`~/.databrickscfg`** — every saved profile is listed automatically.
+3. **Workspace URL** — *Add by URL* and sign in through your browser (OAuth U2M /
+   SSO). No token required; tick *save as profile* to keep it.
 
-Tick *save as profile* and it writes a reusable entry to `~/.databrickscfg`
-(host + `auth_type = external-browser`, **no secret stored** — same as
-`databricks auth login`), so next launch connects instantly. Existing
-`~/.databrickscfg` profiles show up automatically.
+Pick a row and press <kbd>Enter</kbd>. Saved profiles connect instantly; a bundle
+target or a URL opens the browser to sign in — exactly like `databricks auth
+login` (host + `auth_type = external-browser`, **no secret ever stored**).
 
 <table>
   <tr>
-    <td><img src="docs/img/login.png" alt="Login hub"></td>
+    <td><img src="docs/img/login.png" alt="Workspace picker"></td>
     <td><img src="docs/img/auth.png" alt="Authorization overview"></td>
   </tr>
   <tr>
-    <td align="center"><sub>Onboarding hub</sub></td>
+    <td align="center"><sub>Workspace picker — bundle + profiles + URL</sub></td>
     <td align="center"><sub>Authorization overview</sub></td>
   </tr>
 </table>
 
 ## Features
 
+- **Workspace picker** — connect from a Databricks Asset Bundle (`databricks.yml`,
+  offered as the default), your `~/.databrickscfg` profiles, or a workspace URL —
+  each row labelled with its source.
 - **Three-pane browser** — scopes (with secret counts + your access), secrets
   (with relative age), and a detail pane.
 - **Reveal & copy** secret values; values are fetched lazily on reveal and never
@@ -67,9 +71,8 @@ Tick *save as profile* and it writes a reusable entry to `~/.databrickscfg`
   manage scope **permissions (ACLs)**.
 - **Authorization overview** — your effective permission on every scope.
 - **Fuzzy filter** (`/`), **command palette** (`ctrl+p`), vim + arrow navigation.
-- **Multiple workspaces** — switch profiles, or add new connections on the fly.
 - **Pre-loads & caches** everything on startup for an instant experience.
-- Three switchable themes (violet, amber Okudagram, phosphor green).
+- A calm **Graphite** default theme, plus optional violet / amber / phosphor skins.
 
 ## Keys
 
@@ -106,7 +109,7 @@ without a network:
 
 ```
 isolinear/
-  domain/          model, rules + ports (SecretStore, WorkspaceConnector, ProfileStore)
+  domain/          model, rules + ports (SecretStore, WorkspaceConnector, ProfileStore, BundleStore)
   application/     use-cases (WorkspaceService, OnboardingService) + read model
   infrastructure/  adapters — the only Databricks-SDK importers
   interface/       Textual presentation (no business logic, no infra)

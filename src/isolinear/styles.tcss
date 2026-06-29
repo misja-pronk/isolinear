@@ -135,15 +135,17 @@ ListView {
     background: transparent;
 }
 ListView > ListItem {
+    width: 1fr;
     padding: 0 1;
     background: transparent;
 }
-ListView > ListItem.--highlight {
-    background: $primary 15%;
+ListView > ListItem.-highlight {
+    background: $primary 20%;
 }
-ListView:focus > ListItem.--highlight {
-    background: $primary 25%;
+ListView:focus > ListItem.-highlight {
+    background: $primary 45%;
     color: $foreground;
+    text-style: bold;
 }
 
 DataTable {

@@ -63,6 +63,10 @@ async def main() -> None:
     await shot("after-permissions.svg", ["j", "p"])
     # delete confirm for a secret
     await shot("after-confirm.svg", ["j", "tab", "d"])
+    # authorization overview
+    await shot("after-auth.svg", ["a"])
+    # login empty state — no bundle, no profiles
+    await shot("after-login-empty.svg", [], with_session=False)
     # login / onboarding hub — a bundle (default) plus ~/.databrickscfg profiles
     login = stub_onboarding(
         profiles=[
