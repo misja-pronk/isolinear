@@ -9,13 +9,6 @@ Screen {
     padding: 1 2;
 }
 
-/* the whole UI sits in one rounded frame: header · body · footer */
-#app-frame {
-    height: 1fr;
-    border: round $border;
-    background: $background;
-}
-
 /* toasts — quiet card, hairline border */
 Toast {
     background: $panel;
@@ -26,9 +19,10 @@ Toast.-error {
     border: round $error;
 }
 
-/* footer — the bottom chrome bar; only the key letters carry colour */
+/* footer — its own rounded card; only the key letters carry colour */
 Footer {
-    background: $panel;
+    height: 3;
+    border: round $border;
 }
 Footer > .footer-key--key {
     color: $secondary;
@@ -72,10 +66,10 @@ Button.-error:focus {
     background: $error-lighten-1;
 }
 
-/* ── header bar ──────────────────────────────────────────────── */
+/* ── header bar — its own rounded card ───────────────────────── */
 #banner {
-    height: 1;
-    background: $panel;
+    height: 3;
+    border: round $border;
     padding: 0 2;
 }
 #banner #brand {
@@ -103,56 +97,37 @@ Button.-error:focus {
     background: $surface;
 }
 
-/* ── three-pane body ─────────────────────────────────────────── */
+/* ── three-pane body — rounded, colour-coded cards ───────────── */
 #body {
     height: 1fr;
 }
 
 .pane {
     height: 1fr;
-    padding: 1 2 0 2;
-    border-right: solid $border;  /* thin divider between panes */
+    padding: 1 1 0 1;
+    margin-right: 1;
 }
 #detail-pane {
-    border-right: none;
+    margin-right: 0;
 }
-/* the active pane lifts to $surface */
-.pane:focus-within {
-    background: $surface;
-}
-/* quiet label header — brightens to the accent when the pane is active */
-.pane-title {
-    dock: top;
-    height: 1;
-    padding: 0 1;
-    margin-bottom: 1;
-    color: $text-muted;
-    text-style: bold;
-}
-.pane:focus-within .pane-title {
-    color: $secondary;
-    text-style: bold;
-}
+/* each pane is outlined in its section colour — dim when idle, full when active */
+#scopes-pane { border: round $scopes-color 35%; }
+#secrets-pane { border: round $secrets-color 35%; }
+#detail-pane { border: round $detail-color 35%; }
+#scopes-pane:focus-within { border: round $scopes-color; }
+#secrets-pane:focus-within { border: round $secrets-color; }
+#detail-pane:focus-within { border: round $detail-color; }
 
 #scopes-pane { width: 26; }
 #secrets-pane { width: 1fr; min-width: 40; }
 #detail-pane { width: 42; }
 
-ListView {
-    background: transparent;
+/* the scopes table cursor in the scopes section colour */
+#scopes-table > .datatable--cursor {
+    background: $scopes-color 18%;
 }
-ListView > ListItem {
-    width: 1fr;
-    padding: 0 1;
-    background: transparent;
-}
-ListView > ListItem.-highlight {
-    background: $primary 20%;
-}
-ListView:focus > ListItem.-highlight {
-    background: $primary 45%;
-    color: $foreground;
-    text-style: bold;
+#scopes-table:focus > .datatable--cursor {
+    background: $scopes-color 40%;
 }
 
 DataTable {
@@ -165,6 +140,13 @@ DataTable > .datatable--cursor {
 }
 DataTable:focus > .datatable--cursor {
     background: $primary 30%;
+}
+/* the secrets table cursor in the secrets section colour */
+#secrets-table > .datatable--cursor {
+    background: $secrets-color 18%;
+}
+#secrets-table:focus > .datatable--cursor {
+    background: $secrets-color 35%;
 }
 DataTable > .datatable--header {
     background: transparent;
@@ -179,11 +161,10 @@ DataTable > .datatable--header {
 /* a revealed value — a quiet framed card, green = live */
 .secret-value {
     display: none;
-    background: $accent 8%;
-    border: round $accent;
+    border: round $detail-color;
     padding: 0 1;
     margin: 1 1 1 1;
-    color: $accent;
+    color: $detail-color;
 }
 
 /* friendly empty states */

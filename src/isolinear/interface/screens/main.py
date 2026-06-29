@@ -14,9 +14,9 @@ from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.command import DiscoveryHit, Hit, Hits, Provider
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal
 from textual.screen import Screen
-from textual.widgets import DataTable, Footer, Input, ListView, Static
+from textual.widgets import DataTable, Footer, Input, Static
 
 from ...application import OnboardingService, WorkspaceService
 from ...domain import StoreError
@@ -61,9 +61,9 @@ class MainScreen(Screen[None]):
         Binding("w", "switch_workspace", "Workspace", show=False),
         Binding("n", "new_secret", "New"),
         Binding("N", "new_scope", "New scope", show=False),
-        Binding("e", "edit_secret", "Edit", show=False),
-        Binding("d", "delete", "Delete", show=False),
-        Binding("p", "permissions", "Perms", show=False),
+        Binding("e", "edit_secret", "Edit"),
+        Binding("d", "delete", "Delete"),
+        Binding("p", "permissions", "Perms"),
         Binding("space", "reveal", "Reveal"),
         Binding("c", "copy", "Copy"),
         Binding("r", "refresh_scope", "Refresh", show=False),
@@ -97,17 +97,20 @@ class MainScreen(Screen[None]):
 
     # ── layout ─────────────────────────────────────────────────────────
     def compose(self) -> ComposeResult:
-        with Vertical(id="app-frame"):
-            with Horizontal(id="banner"):
-                yield Static("Isolinear", id="brand")
-                yield Static("", id="breadcrumb")
-                yield Static("", id="ws-status")
-            with Horizontal(id="body"):
-                yield ScopesPane()
-                yield SecretsPane()
-                yield DetailPane()
-            yield Input(id="filter-bar", placeholder="filter…")
-            yield Footer(show_command_palette=False)
+        with Horizontal(id="banner"):
+            yield Static(
+                "[$scopes-color]█[/][$secrets-color]█[/][$detail-color]█[/]"
+                "  [b]Isolinear[/]",
+                id="brand",
+            )
+            yield Static("", id="breadcrumb")
+            yield Static("", id="ws-status")
+        with Horizontal(id="body"):
+            yield ScopesPane()
+            yield SecretsPane()
+            yield DetailPane()
+        yield Input(id="filter-bar", placeholder="filter…")
+        yield Footer(show_command_palette=False)
 
     def on_mount(self) -> None:
         if self.session is not None:
@@ -150,10 +153,14 @@ class MainScreen(Screen[None]):
         bc = self.query_one("#breadcrumb", Static)
         parts: list[str] = []
         if self.current_scope:
-            parts.append(f"[$text-muted]{self.current_scope}[/]")
+            parts.append(
+                f"[$text-muted]scope:[/] [$scopes-color b]{self.current_scope}[/]"
+            )
         if self.current_secret:
-            parts.append(f"[b]{self.current_secret}[/]")
-        bc.update("  [dim]/[/]  ".join(parts))
+            parts.append(
+                f"[$text-muted]secret:[/] [$secrets-color b]{self.current_secret}[/]"
+            )
+        bc.update("   [dim]/[/]   ".join(parts))
 
     # ── scope view models + filtering ───────────────────────────────────
     def _scope_rows(self) -> list[ScopeRow]:
@@ -195,7 +202,7 @@ class MainScreen(Screen[None]):
         if self._filter_target == "secrets":
             self.secrets_pane.focus_table()
         else:
-            self.scopes_pane.query_one(ListView).focus()
+            self.scopes_pane.focus_table()
         self._filter_target = None
 
     def _apply_filter(self, text: str) -> None:
@@ -320,8 +327,15 @@ class MainScreen(Screen[None]):
             if self._revealed == (scope, key)
             else None
         )
-        self.detail_pane.show_secret(self._sess.secret(scope, key), scope, key, value)
-        self._render_status()  # flip 🔒 sealed ↔ 🔓 unsealed
+        self.detail_pane.show_secret(
+            self._sess.secret(scope, key),
+            scope,
+            key,
+            value,
+            self._access_for(scope),
+            self._sess.acls_for(scope),
+        )
+        self._render_status()
 
     @on(ScopesPane.Selected)
     def _on_scope_selected(self, message: ScopesPane.Selected) -> None:
@@ -332,12 +346,12 @@ class MainScreen(Screen[None]):
     def _on_secret_selected(self, message: SecretsPane.Selected) -> None:
         self._show_secret(message.key)
 
-    @on(ListView.Selected, "#scopes-list")
+    @on(DataTable.RowSelected, "#scopes-table")
     def _scope_activated(self) -> None:
         self.secrets_pane.focus_table()
 
     # ── keyboard navigation ─────────────────────────────────────────────
-    _PANES = ("scopes-list", "secrets-table")
+    _PANES = ("scopes-table", "secrets-table")
 
     def action_vi(self, direction: str) -> None:
         fn = getattr(self.focused, f"action_cursor_{direction}", None)
@@ -350,18 +364,27 @@ class MainScreen(Screen[None]):
         step = 1 if direction == "right" else -1
         target = self._PANES[(idx + step) % len(self._PANES)]
         self.query_one(f"#{target}").focus()
+        self.refresh_bindings()  # footer is context-aware (check_action)
 
     def action_jump(self, where: str) -> None:
         widget = self.focused
-        if isinstance(widget, ListView) and len(widget):
-            widget.index = 0 if where == "top" else len(widget) - 1
-        elif isinstance(widget, DataTable) and widget.row_count:
+        if isinstance(widget, DataTable) and widget.row_count:
             row = 0 if where == "top" else widget.row_count - 1
             widget.move_cursor(row=row)
 
     def action_sort_secrets(self) -> None:
         if getattr(self.focused, "id", None) == "secrets-table":
             self.secrets_pane.cycle_sort()
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        """Context-aware footer — show only the keys that fit the focused pane.
+        (In Textual, returning False hides a binding; None would merely dim it.)"""
+        fid = getattr(self.focused, "id", None)
+        if action in ("reveal", "copy", "edit_secret"):
+            return fid == "secrets-table"
+        if action in ("new_secret", "permissions"):
+            return fid == "scopes-table"
+        return True
 
     # ── command palette ─────────────────────────────────────────────────
     def command_catalog(self) -> list[tuple[str, object]]:
@@ -460,7 +483,7 @@ class MainScreen(Screen[None]):
                 ConfirmModal("Delete secret", f"Delete secret “{key}”?"),
                 partial(self._delete_secret_if, scope, key),
             )
-        elif focused_id == "scopes-list" and self.current_scope:
+        elif focused_id == "scopes-table" and self.current_scope:
             name = self.current_scope
             self.app.push_screen(
                 ConfirmModal(

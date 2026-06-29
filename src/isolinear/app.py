@@ -36,6 +36,17 @@ class IsolinearApp(App[None]):
         self._onboarding = onboarding
         self._initial_session = session
 
+    def get_theme_variable_defaults(self) -> dict[str, str]:
+        # The stylesheet is parsed under Textual's default theme before ours is
+        # applied, so the per-section accents must resolve there too. Each
+        # Isolinear theme overrides these with its own values.
+        return {
+            **super().get_theme_variable_defaults(),
+            "scopes-color": "#8b7cff",
+            "secrets-color": "#4ec9e0",
+            "detail-color": "#e0b24a",
+        }
+
     def on_mount(self) -> None:
         for theme in ISOLINEAR_THEMES:
             self.register_theme(theme)

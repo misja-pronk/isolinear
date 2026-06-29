@@ -35,6 +35,10 @@ ISOLINEAR_GRAPHITE = Theme(
         "block-cursor-foreground": "#0d0d11",
         "footer-key-foreground": "#9b8cff",
         "footer-background": "#0d0d11",
+        # per-section accents (scopes / secrets / detail)
+        "scopes-color": "#8b7cff",
+        "secrets-color": "#4ec9e0",
+        "detail-color": "#e0b24a",
     },
 )
 
@@ -61,6 +65,9 @@ ISOLINEAR_VIOLET = Theme(
         "block-cursor-foreground": "#0d0a14",
         "footer-key-foreground": "#29e0c4",
         "footer-background": "#0d0a14",
+        "scopes-color": "#7c5cff",
+        "secrets-color": "#29e0c4",
+        "detail-color": "#ff9f1c",
     },
 )
 
@@ -85,6 +92,9 @@ ISOLINEAR_AMBER = Theme(
         "block-cursor-foreground": "#0a0a0a",
         "footer-key-foreground": "#6bb6ff",
         "footer-background": "#0a0a0a",
+        "scopes-color": "#ff9f43",
+        "secrets-color": "#6bb6ff",
+        "detail-color": "#ffd166",
     },
 )
 
@@ -109,6 +119,9 @@ ISOLINEAR_PHOSPHOR = Theme(
         "block-cursor-foreground": "#070b07",
         "footer-key-foreground": "#9ad29a",
         "footer-background": "#070b07",
+        "scopes-color": "#5ad27a",
+        "secrets-color": "#82c8b0",
+        "detail-color": "#d7d77a",
     },
 )
 

@@ -14,7 +14,7 @@ from textual import on
 from textual.app import ComposeResult
 from textual.containers import Vertical, VerticalScroll
 from textual.message import Message
-from textual.widgets import DataTable, Label, ListItem, ListView, Static
+from textual.widgets import DataTable, Static
 
 from ..domain import Acl, Scope, Secret
 
@@ -53,7 +53,7 @@ class ScopeRow:
 
 
 class ScopesPane(Vertical):
-    """Left pane: the scope list (filterable, with counts + access)."""
+    """Left pane: the scopes table (filterable, with secret counts)."""
 
     class Selected(Message):
         def __init__(self, scope: str) -> None:
@@ -67,8 +67,9 @@ class ScopesPane(Vertical):
         self._filter = ""
 
     def compose(self) -> ComposeResult:
-        yield Static("SCOPES", classes="pane-title", id="scopes-title")
-        yield ListView(id="scopes-list")
+        table: DataTable = DataTable(id="scopes-table", zebra_stripes=False)
+        table.cursor_type = "row"
+        yield table
         yield Static("", id="scopes-empty", classes="empty-hint")
 
     def show(
@@ -83,13 +84,13 @@ class ScopesPane(Vertical):
         self._rebuild(focus=False)
 
     def _rebuild(self, *, focus: bool, keep: str | None = None) -> None:
-        lv = self.query_one(ListView)
-        lv.clear()
+        table = self.query_one(DataTable)
+        table.clear(columns=True)
+        table.add_columns("Scope", "Secrets")
         self._visible = [r for r in self._rows if fuzzy_match(self._filter, r.name)]
         for r in self._visible:
-            lv.append(ListItem(Label(f"{r.name}  [$text-muted]{r.count}[/]")))
-        self.query_one("#scopes-title", Static).update(f"SCOPES  {len(self._rows)}")
-        lv.display = bool(self._visible)
+            table.add_row(r.name, Text(str(r.count), style="grey62"), key=r.name)
+        table.display = bool(self._visible)
         hint = self.query_one("#scopes-empty", Static)
         hint.display = not self._visible
         if not self._rows:
@@ -100,15 +101,17 @@ class ScopesPane(Vertical):
             hint.update(f"[$text-muted]No scope matches\n“{self._filter}”.[/]")
         if self._visible:
             idx = next((i for i, r in enumerate(self._visible) if r.name == keep), 0)
-            lv.index = idx
+            table.move_cursor(row=idx)
             if focus:
-                lv.focus()
+                table.focus()
 
-    @on(ListView.Highlighted, "#scopes-list")
-    def _highlighted(self, event: ListView.Highlighted) -> None:
-        idx = event.list_view.index
-        if idx is not None and 0 <= idx < len(self._visible):
-            self.post_message(self.Selected(self._visible[idx].name))
+    def focus_table(self) -> None:
+        self.query_one(DataTable).focus()
+
+    @on(DataTable.RowHighlighted, "#scopes-table")
+    def _highlighted(self, event: DataTable.RowHighlighted) -> None:
+        if event.row_key is not None and event.row_key.value:
+            self.post_message(self.Selected(event.row_key.value))
 
 
 class SecretsPane(Vertical):
@@ -128,7 +131,6 @@ class SecretsPane(Vertical):
         self._sort_rev = False
 
     def compose(self) -> ComposeResult:
-        yield Static("SECRETS", classes="pane-title", id="secrets-title")
         table: DataTable = DataTable(id="secrets-table", zebra_stripes=False)
         table.cursor_type = "row"
         yield table
@@ -165,8 +167,6 @@ class SecretsPane(Vertical):
                 Text(age, style="grey50"),
                 key=s.key,
             )
-        title = f"SECRETS  {self._scope} · {len(visible)}" if self._scope else "SECRETS"
-        self.query_one("#secrets-title", Static).update(title)
         table.display = bool(visible)
         hint = self.query_one("#secrets-empty", Static)
         hint.display = not visible and bool(self._scope)
@@ -183,7 +183,6 @@ class SecretsPane(Vertical):
         self._scope = ""
         self._secrets = []
         self.query_one(DataTable).clear()
-        self.query_one("#secrets-title", Static).update("SECRETS")
         self.query_one("#secrets-empty").display = False
 
     def focus_table(self) -> None:
@@ -231,7 +230,6 @@ class DetailPane(Vertical):
         super().__init__(id="detail-pane", classes="pane")
 
     def compose(self) -> ComposeResult:
-        yield Static("DETAIL", classes="pane-title")
         with VerticalScroll():
             yield Static("", id="detail-body")
             yield Static("", id="detail-value", classes="secret-value")
@@ -280,27 +278,42 @@ class DetailPane(Vertical):
         self._body("\n".join(lines))
 
     def show_secret(
-        self, secret: Secret | None, scope: str, key: str, value: str | None
+        self,
+        secret: Secret | None,
+        scope: str,
+        key: str,
+        value: str | None,
+        access: str = "—",
+        acls: list[Acl] | None = None,
     ) -> None:
+        acls = acls or []
         updated = secret.last_updated if secret else "—"
-        age = relative_age(secret.last_updated_ms)[0] if secret else "—"
         lines = [
             f"[b]{key}[/]",
             "",
-            f"[$text-muted]Scope[/]     {scope}",
-            f"[$text-muted]Updated[/]   {updated} [dim]({age} ago)[/]",
+            f"[$text-muted]Scope[/]        {scope}",
+            f"[$text-muted]Updated[/]      {updated}",
+            f"[$text-muted]Your access[/]  {access if access != '—' else 'none'}",
             "",
+            f"[$text-muted]Permissions[/]  [dim]{len(acls)}[/]",
         ]
+        if acls:
+            lines += [
+                f"  {a.principal}  [$text-muted]{a.permission}[/]" for a in acls
+            ]
+        else:
+            lines.append("  [$text-muted](none)[/]")
+        lines.append("")
         if value is not None:
             lines += [
-                "[$text-muted]Value[/]     [$accent]revealed[/]",
+                "[$text-muted]Value[/]        [$detail-color]revealed[/]",
                 "[dim]space to hide · c to copy[/]",
             ]
             self._body("\n".join(lines))
             self.show_value(value)
         else:
             lines += [
-                "[$text-muted]Value[/]     [dim]••••••••[/]",
+                "[$text-muted]Value[/]        [dim]••••••••[/]",
                 "[dim]space to reveal[/]",
             ]
             self._hide_value()

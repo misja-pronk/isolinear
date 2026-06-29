@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import cast
 
-from textual.widgets import DataTable, ListView
+from textual.widgets import DataTable
 
 from fakes import seeded_store, stub_onboarding
 from isolinear.app import IsolinearApp
@@ -23,7 +23,7 @@ async def test_warm_populates_scopes_and_selects_first():
         await app.workers.wait_for_complete()
         await pilot.pause()
         main = cast(MainScreen, app.screen)
-        assert len(main.query_one(ScopesPane).query_one(ListView)) == 2
+        assert main.query_one(ScopesPane).query_one(DataTable).row_count == 2
         # scopes are sorted -> 'kv' before 'prod'
         assert main.current_scope == "kv"
 
@@ -123,4 +123,4 @@ async def test_new_scope_via_modal_updates_pane():
         await app.workers.wait_for_complete()
         await pilot.pause()
         assert any(s.name == "stage" for s in session.scopes)
-        assert len(app.screen.query_one(ScopesPane).query_one(ListView)) == 3
+        assert app.screen.query_one(ScopesPane).query_one(DataTable).row_count == 3
