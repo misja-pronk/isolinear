@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+from pathlib import Path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "..", "tests"))
@@ -33,7 +34,22 @@ async def shot(name: str, steps: list[str], *, with_session: bool = True) -> Non
             await pilot.press(key)
             await app.workers.wait_for_complete()
             await pilot.pause()
-        app.save_screenshot(filename=name, path=HERE)
+        path = app.save_screenshot(filename=name, path=HERE)
+        # Textual bundles Fira Code into the SVG; re-point it at the system mono
+        # (SF Mono on macOS via `ui-monospace`) so the export matches a real
+        # terminal, and give the fake window chrome a system sans title.
+        svg = (
+            Path(path)
+            .read_text()
+            .replace(
+                "Fira Code, monospace", "ui-monospace, SFMono-Regular, Menlo, monospace"
+            )
+            .replace(
+                "font-family: arial",
+                "font-family: ui-sans-serif, -apple-system, Helvetica Neue, sans-serif",
+            )
+        )
+        Path(path).write_text(svg)
         print("wrote", name)
 
 

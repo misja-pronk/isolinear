@@ -21,7 +21,7 @@ from .interface.theme import ISOLINEAR_THEMES
 class IsolinearApp(App[None]):
     CSS_PATH = "styles.tcss"
     TITLE = "Isolinear"
-    BINDINGS = [Binding("q", "quit", "Quit")]
+    BINDINGS = [Binding("q", "quit", "Quit", show=False)]
 
     def __init__(
         self,

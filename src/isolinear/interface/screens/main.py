@@ -105,7 +105,7 @@ class MainScreen(Screen[None]):
             yield SecretsPane()
             yield DetailPane()
         yield Input(id="filter-bar", placeholder="filter…")
-        yield Footer()
+        yield Footer(show_command_palette=False)
 
     def on_mount(self) -> None:
         if self.session is not None:

@@ -20,7 +20,7 @@
     }
 
     .terminal-3030863021-matrix {
-        font-family: Fira Code, monospace;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         font-size: 20px;
         line-height: 24.4px;
         font-variant-east-asian: full-width;
@@ -29,7 +29,7 @@
     .terminal-3030863021-title {
         font-size: 18px;
         font-weight: bold;
-        font-family: arial;
+        font-family: ui-sans-serif, -apple-system, Helvetica Neue, sans-serif;
     }
 
     .terminal-3030863021-r1 { fill: #c5c8c6 }
