@@ -202,6 +202,11 @@ ModalScreen {
     color: $foreground;
     margin-bottom: 1;
 }
+/* the dialog's actions, docked to the bottom like a status bar */
+#dialog .dialog-hint {
+    color: $text-muted;
+    margin-top: 1;
+}
 #dialog.danger .dialog-title {
     color: $error;
 }

@@ -49,16 +49,21 @@ class ConfirmModal(ModalScreen[bool]):
         self._danger = danger
 
     def compose(self) -> ComposeResult:
+        ok_label = "Delete" if self._danger else "OK"
         with Vertical(id="dialog", classes="danger" if self._danger else ""):
             yield Static(self._title, classes="dialog-title")
             yield Static(self._message)
             with Horizontal(classes="buttons"):
                 yield Button("Cancel", id="cancel", variant="default")
                 yield Button(
-                    "Delete" if self._danger else "OK",
-                    id="ok",
-                    variant="error" if self._danger else "primary",
+                    ok_label, id="ok", variant="error" if self._danger else "primary"
                 )
+            key = "$error" if self._danger else "$primary"
+            yield Static(
+                f"[{key} b]y[/] {ok_label.lower()}   ·   "
+                "[$text-muted]n / esc cancel[/]",
+                classes="dialog-hint",
+            )
 
     @on(Button.Pressed, "#ok")
     def action_confirm(self) -> None:
@@ -213,6 +218,7 @@ class AuthScreen(ModalScreen[None]):
                     yes_no(self.app, s.can_manage),
                 )
             yield table
+            yield Static("[$text-muted]esc close[/]", classes="dialog-hint")
 
     def on_mount(self) -> None:
         self.query_one(DataTable).focus()
@@ -299,11 +305,14 @@ class PermissionsScreen(ModalScreen[None]):
             yield Static(
                 f"Permissions   [$scopes-color]{self._scope}[/]", classes="dialog-title"
             )
-            yield Static("[$text-muted]a add · e change · d remove · esc close[/]")
             table: DataTable = DataTable(id="acl-table", zebra_stripes=False)
             table.cursor_type = "row"
             table.add_columns("Principal", "Access")
             yield table
+            yield Static(
+                "[$text-muted]a add · e change · d remove · esc close[/]",
+                classes="dialog-hint",
+            )
 
     def on_mount(self) -> None:
         self._populate()
