@@ -27,6 +27,12 @@ def perm_cell(app: App, permission: str) -> Text:
     return Text(permission, style=style)
 
 
+def yes_no(app: App, yes: bool) -> Text:
+    """A coloured ✓ / · cell for a boolean capability (green when granted)."""
+    var = "success" if yes else "text-muted"
+    return Text("✓" if yes else "·", style=app.theme_variables.get(var, ""))
+
+
 class ConfirmModal(ModalScreen[bool]):
     """Yes/No guard for destructive actions."""
 
@@ -203,8 +209,8 @@ class AuthScreen(ModalScreen[None]):
                     s.scope,
                     perm_cell(self.app, s.effective),
                     str(s.acl_count),
-                    "✓" if s.can_write else "·",
-                    "✓" if s.can_manage else "·",
+                    yes_no(self.app, s.can_write),
+                    yes_no(self.app, s.can_manage),
                 )
             yield table
 

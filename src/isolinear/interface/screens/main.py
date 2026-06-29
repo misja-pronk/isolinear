@@ -480,14 +480,20 @@ class MainScreen(Screen[None]):
         if focused_id == "secrets-table" and self.current_scope and self.current_secret:
             scope, key = self.current_scope, self.current_secret
             self.app.push_screen(
-                ConfirmModal("Delete secret", f"Delete secret “{key}”?"),
+                ConfirmModal(
+                    "Delete secret",
+                    f"Permanently delete [b]{key}[/] from [b]{scope}[/].\n"
+                    "[$text-muted]This can't be undone.[/]",
+                ),
                 partial(self._delete_secret_if, scope, key),
             )
         elif focused_id == "scopes-table" and self.current_scope:
             name = self.current_scope
             self.app.push_screen(
                 ConfirmModal(
-                    "Delete scope", f"Delete scope “{name}” and all its secrets?"
+                    "Delete scope",
+                    f"Permanently delete [b]{name}[/] and all its secrets.\n"
+                    "[$text-muted]This can't be undone.[/]",
                 ),
                 partial(self._delete_scope_if, name),
             )

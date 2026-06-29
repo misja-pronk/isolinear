@@ -178,8 +178,10 @@ DataTable > .datatable--header {
 }
 
 /* ── modals ──────────────────────────────────────────────────── */
+/* darken the backdrop so the borderless dialog reads cleanly over the browser */
 ModalScreen {
     align: center middle;
+    background: $background 88%;
 }
 #dialog {
     width: 64;
@@ -187,7 +189,6 @@ ModalScreen {
     height: auto;          /* size to content — a compact card */
     max-height: 90%;
     padding: 1 3;
-    background: $surface;
     border: round $border;
 }
 #dialog.danger {
@@ -249,7 +250,6 @@ LoginScreen {
     height: auto;
     padding: 2 4;
     border: round $border;
-    background: $surface;
 }
 /* wider when showing the workspaces table */
 #login-card.browse {
