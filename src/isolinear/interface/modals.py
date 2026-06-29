@@ -13,7 +13,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Input, Select, Static
 
 from ..application import WorkspaceService
-from ..domain import AuthSummary, Identity, StoreError
+from ..domain import AuthSummary, Identity, StoreError, perm_rank
 from .widgets import PERM_COLOR
 
 PERMISSIONS = ["READ", "WRITE", "MANAGE"]
@@ -27,19 +27,17 @@ def perm_cell(app: App, permission: str) -> Text:
     return Text(permission, style=style)
 
 
-def yes_no(app: App, yes: bool) -> Text:
-    """A coloured ✓ / · cell for a boolean capability (green when granted)."""
-    var = "success" if yes else "text-muted"
-    return Text("✓" if yes else "·", style=app.theme_variables.get(var, ""))
+def key_label(label: str) -> str:
+    """A button label with its first letter underlined as the access key."""
+    return f"[u]{label[0]}[/u]{label[1:]}" if label else label
 
 
 class ConfirmModal(ModalScreen[bool]):
     """Yes/No guard for destructive actions."""
 
     BINDINGS = [
-        Binding("escape", "cancel", "Cancel"),
-        Binding("y", "confirm", "Yes"),
-        Binding("n", "cancel", "No"),
+        Binding("escape,c,n", "cancel", "Cancel"),
+        Binding("y,d,o", "confirm", "Confirm"),
     ]
 
     def __init__(self, title: str, message: str, danger: bool = True) -> None:
@@ -54,16 +52,12 @@ class ConfirmModal(ModalScreen[bool]):
             yield Static(self._title, classes="dialog-title")
             yield Static(self._message)
             with Horizontal(classes="buttons"):
-                yield Button("Cancel", id="cancel", variant="default")
+                yield Button(key_label("Cancel"), id="cancel", variant="default")
                 yield Button(
-                    ok_label, id="ok", variant="error" if self._danger else "primary"
+                    key_label(ok_label),
+                    id="ok",
+                    variant="error" if self._danger else "primary",
                 )
-            key = "$error" if self._danger else "$primary"
-            yield Static(
-                f"[{key} b]y[/] {ok_label.lower()}   ·   "
-                "[$text-muted]n / esc cancel[/]",
-                classes="dialog-hint",
-            )
 
     @on(Button.Pressed, "#ok")
     def action_confirm(self) -> None:
@@ -91,7 +85,9 @@ class SecretFormModal(ModalScreen[tuple[str, str] | None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
             verb = "Edit secret" if self._edit else "New secret"
-            yield Static(f"{verb}  ·  scope “{self._scope}”", classes="dialog-title")
+            yield Static(
+                f"{verb}   [$scopes-color]{self._scope}[/]", classes="dialog-title"
+            )
             key_input = Input(value=self._key, placeholder="key", id="f-key")
             key_input.disabled = self._edit
             yield key_input
@@ -180,7 +176,8 @@ class HelpScreen(ModalScreen[None]):
             yield Static("Isolinear — keys", classes="dialog-title")
             with VerticalScroll():
                 for key, desc in self.KEYS:
-                    yield Static(f"[b $primary]{key:<12}[/]  {desc}")
+                    yield Static(f"[b $secondary]{key:<12}[/]  {desc}")
+            yield Static("[$text-muted]esc close[/]", classes="dialog-hint")
 
     def action_close(self) -> None:
         self.dismiss(None)
@@ -201,21 +198,21 @@ class AuthScreen(ModalScreen[None]):
             yield Static("Authorization overview", classes="dialog-title")
             who = self._identity.user_name or "(unknown)"
             status = (
-                "✓ authenticated"
+                "[$success]✓ authenticated[/]"
                 if self._identity.authenticated
-                else "✗ not authenticated"
+                else "[$error]✗ not authenticated[/]"
             )
-            yield Static(f"[$text-muted]Identity[/]  [b]{who}[/]   [$primary]{status}[/]")
+            yield Static(f"[$text-muted]Identity[/]  [b]{who}[/]   {status}")
             table: DataTable = DataTable(id="auth-table", zebra_stripes=False)
             table.cursor_type = "row"
-            table.add_columns("Scope", "My access", "ACLs", "Write", "Manage")
-            for s in self._summaries:
+            table.add_columns("Scope", "Your access", "Principals")
+            ranked = sorted(
+                self._summaries,
+                key=lambda s: (-perm_rank(s.effective), s.scope.lower()),
+            )
+            for s in ranked:
                 table.add_row(
-                    s.scope,
-                    perm_cell(self.app, s.effective),
-                    str(s.acl_count),
-                    yes_no(self.app, s.can_write),
-                    yes_no(self.app, s.can_manage),
+                    s.scope, perm_cell(self.app, s.effective), str(s.acl_count)
                 )
             yield table
             yield Static("[$text-muted]esc close[/]", classes="dialog-hint")

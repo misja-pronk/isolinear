@@ -377,13 +377,15 @@ class MainScreen(Screen[None]):
             self.secrets_pane.cycle_sort()
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
-        """Context-aware footer — show only the keys that fit the focused pane.
-        (In Textual, returning False hides a binding; None would merely dim it.)"""
+        """Context-aware footer — hide actions that don't fit the focused pane.
+        In Textual, returning False hides AND disables a binding, so only hide
+        actions that are genuinely invalid in that context (everything else stays
+        usable from both panes)."""
         fid = getattr(self.focused, "id", None)
         if action in ("reveal", "copy", "edit_secret"):
-            return fid == "secrets-table"
-        if action in ("new_secret", "permissions"):
-            return fid == "scopes-table"
+            return fid == "secrets-table"  # need a selected secret
+        if action == "permissions":
+            return fid == "scopes-table"  # scope-level action
         return True
 
     # ── command palette ─────────────────────────────────────────────────
