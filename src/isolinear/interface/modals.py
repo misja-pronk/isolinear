@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncio
 
+from rich.text import Text
 from textual import on, work
-from textual.app import ComposeResult
+from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
@@ -13,8 +14,17 @@ from textual.widgets import Button, DataTable, Input, Select, Static
 
 from ..application import WorkspaceService
 from ..domain import AuthSummary, Identity, StoreError
+from .widgets import PERM_COLOR
 
 PERMISSIONS = ["READ", "WRITE", "MANAGE"]
+
+
+def perm_cell(app: App, permission: str) -> Text:
+    """A DataTable cell for a permission level, coloured by privilege."""
+    var = PERM_COLOR.get(permission, "$foreground").lstrip("$")
+    color = app.theme_variables.get(var, "")
+    style = f"bold {color}" if permission == "MANAGE" else color
+    return Text(permission, style=style)
 
 
 class ConfirmModal(ModalScreen[bool]):
@@ -191,7 +201,7 @@ class AuthScreen(ModalScreen[None]):
             for s in self._summaries:
                 table.add_row(
                     s.scope,
-                    s.effective,
+                    perm_cell(self.app, s.effective),
                     str(s.acl_count),
                     "✓" if s.can_write else "·",
                     "✓" if s.can_manage else "·",
@@ -279,12 +289,14 @@ class PermissionsScreen(ModalScreen[None]):
         self._principals: list[str] = []
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="dialog"):
-            yield Static(f"Permissions — {self._scope}", classes="dialog-title")
+        with Vertical(id="dialog", classes="scope"):
+            yield Static(
+                f"Permissions   [$scopes-color]{self._scope}[/]", classes="dialog-title"
+            )
             yield Static("[$text-muted]a add · e change · d remove · esc close[/]")
             table: DataTable = DataTable(id="acl-table", zebra_stripes=False)
             table.cursor_type = "row"
-            table.add_columns("Principal", "Permission")
+            table.add_columns("Principal", "Access")
             yield table
 
     def on_mount(self) -> None:
@@ -296,7 +308,9 @@ class PermissionsScreen(ModalScreen[None]):
         table.clear()
         self._principals = []
         for acl in self._session.acls_for(self._scope):
-            table.add_row(acl.principal, acl.permission, key=acl.principal)
+            table.add_row(
+                acl.principal, perm_cell(self.app, acl.permission), key=acl.principal
+            )
             self._principals.append(acl.principal)
 
     def _selected(self) -> str | None:

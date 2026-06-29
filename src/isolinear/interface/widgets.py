@@ -42,6 +42,21 @@ def relative_age(ms: int | None) -> tuple[str, bool]:
     return "now", True
 
 
+# Permission levels, coloured by privilege so elevated access is scannable.
+PERM_COLOR = {
+    "READ": "$text-muted",
+    "WRITE": "$secrets-color",
+    "MANAGE": "$detail-color",
+}
+
+
+def perm_markup(permission: str) -> str:
+    """Content markup for a permission level, coloured by privilege."""
+    color = PERM_COLOR.get(permission, "$foreground")
+    weight = " b" if permission == "MANAGE" else ""
+    return f"[{color}{weight}]{permission}[/]"
+
+
 @dataclass
 class ScopeRow:
     """View model for one scope row."""
@@ -259,7 +274,7 @@ class DetailPane(Vertical):
     ) -> None:
         self._hide_value()
         backend = "Azure Key Vault" if scope.is_keyvault else "Databricks-backed"
-        access_text = access if access != "—" else "none"
+        access_text = perm_markup(access) if access != "—" else "[$text-muted]none[/]"
         lines = [
             f"[b]{scope.name}[/]",
             "",
@@ -270,8 +285,7 @@ class DetailPane(Vertical):
             f"[$text-muted]Permissions[/]  [dim]{len(acls)}[/]",
         ]
         if acls:
-            for acl in acls:
-                lines.append(f"  {acl.principal}  [$text-muted]{acl.permission}[/]")
+            lines += [f"  {a.principal}  {perm_markup(a.permission)}" for a in acls]
         else:
             lines.append("  [$text-muted](none)[/]")
         lines += ["", "[$text-muted]p to manage permissions[/]"]
@@ -288,19 +302,18 @@ class DetailPane(Vertical):
     ) -> None:
         acls = acls or []
         updated = secret.last_updated if secret else "—"
+        access_text = perm_markup(access) if access != "—" else "[$text-muted]none[/]"
         lines = [
             f"[b]{key}[/]",
             "",
             f"[$text-muted]Scope[/]        {scope}",
             f"[$text-muted]Updated[/]      {updated}",
-            f"[$text-muted]Your access[/]  {access if access != '—' else 'none'}",
+            f"[$text-muted]Your access[/]  {access_text}",
             "",
             f"[$text-muted]Permissions[/]  [dim]{len(acls)}[/]",
         ]
         if acls:
-            lines += [
-                f"  {a.principal}  [$text-muted]{a.permission}[/]" for a in acls
-            ]
+            lines += [f"  {a.principal}  {perm_markup(a.permission)}" for a in acls]
         else:
             lines.append("  [$text-muted](none)[/]")
         lines.append("")

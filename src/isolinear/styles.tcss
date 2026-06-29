@@ -193,6 +193,9 @@ ModalScreen {
 #dialog.danger {
     border: round $error;
 }
+#dialog.scope {
+    border: round $scopes-color;
+}
 #dialog .dialog-title {
     text-style: bold;
     color: $foreground;
