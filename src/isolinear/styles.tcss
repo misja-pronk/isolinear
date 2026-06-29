@@ -1,23 +1,26 @@
-/* Isolinear — Databricks Secret Manager */
+/* Isolinear — calm, minimal secret manager.
+   Hierarchy comes from spacing + weight, not loud colour blocks. One accent
+   ($primary) marks focus + selection; $accent (green) marks a revealed value;
+   $error (red) marks destructive actions. Everything else is neutral. */
 
 Screen {
     background: $background;
     color: $foreground;
 }
 
-/* toasts — LCARS-styled notifications */
+/* toasts — quiet card, hairline border */
 Toast {
     background: $panel;
-    border: round $primary;
+    border: round $border;
     color: $foreground;
 }
 Toast.-error {
     border: round $error;
 }
 
-/* footer — a solid LCARS bar with cyan keys */
+/* footer — quiet bar; only the key letters carry colour */
 Footer {
-    background: $surface;
+    background: $background;
 }
 Footer > .footer-key--key {
     color: $secondary;
@@ -27,30 +30,27 @@ Footer > .footer-key--description {
     color: $text-muted;
 }
 
-/* ── top banner ─────────────────────────────────────────────── */
+/* ── top bar ─────────────────────────────────────────────────── */
 #banner {
     height: 1;
-    background: $surface;
+    background: $background;
+    padding: 0 1;
+    margin-bottom: 1;
 }
 #banner #brand {
     width: auto;
-    padding: 0 2;
-    background: $primary;
-    color: $background;
+    padding: 0 2 0 0;
+    color: $foreground;
     text-style: bold;
 }
 #banner #breadcrumb {
     width: 1fr;
-    padding: 0 2;
     color: $text-muted;
-    text-style: none;
 }
 #banner #ws-status {
     width: auto;
     text-align: right;
-    padding: 0 1;
     color: $text-muted;
-    text-style: none;
 }
 
 /* filter bar — hidden until you press / */
@@ -58,39 +58,44 @@ Footer > .footer-key--description {
     display: none;
     dock: bottom;
     height: 3;
-    border: round $secondary;
+    border: round $primary;
     background: $surface;
 }
 
-/* ── three-pane body ────────────────────────────────────────── */
+/* ── three-pane body ─────────────────────────────────────────── */
 #body {
     height: 1fr;
+    padding: 0 1;
 }
 
 .pane {
     border: round $border;
     height: 1fr;
-    padding: 0;
+    padding: 0 1;
+    margin-right: 2;
+}
+#detail-pane {
+    margin-right: 0;
 }
 .pane:focus-within {
     border: round $primary;
 }
-/* LCARS-style solid color-block header */
+/* quiet label header — brightens when the pane is focused */
 .pane-title {
     dock: top;
     height: 1;
     padding: 0 1;
-    background: $primary;
-    color: $background;
+    margin-bottom: 1;
+    color: $text-muted;
     text-style: bold;
 }
 .pane:focus-within .pane-title {
-    background: $secondary;
+    color: $foreground;
 }
 
-#scopes-pane { width: 28; }
+#scopes-pane { width: 26; }
 #secrets-pane { width: 1fr; min-width: 40; }
-#detail-pane { width: 44; }
+#detail-pane { width: 42; }
 
 ListView {
     background: transparent;
@@ -100,39 +105,40 @@ ListView > ListItem {
     background: transparent;
 }
 ListView > ListItem.--highlight {
-    background: $primary 25%;
+    background: $primary 15%;
 }
 ListView:focus > ListItem.--highlight {
-    background: $primary 40%;
+    background: $primary 25%;
     color: $foreground;
 }
-
-.kv-icon { color: $accent; }
 
 DataTable {
     background: transparent;
     height: 1fr;
 }
 DataTable > .datatable--cursor {
-    background: $primary 40%;
+    background: $primary 18%;
+}
+DataTable:focus > .datatable--cursor {
+    background: $primary 30%;
 }
 DataTable > .datatable--header {
-    background: $panel;
-    color: $primary;
-    text-style: bold;
+    background: transparent;
+    color: $text-muted;
+    text-style: none;
 }
 
-/* ── detail pane ────────────────────────────────────────────── */
+/* ── detail pane ─────────────────────────────────────────────── */
 #detail-body {
-    padding: 1 1;
+    padding: 0 1;
 }
-/* the revealed secret value — a framed amber "card" */
+/* a revealed value — a quiet framed card, green = live */
 .secret-value {
     display: none;
-    background: $accent 12%;
+    background: $accent 8%;
     border: round $accent;
     padding: 0 1;
-    margin: 0 1 1 1;
+    margin: 1 1 1 1;
     color: $accent;
 }
 
@@ -146,25 +152,25 @@ DataTable > .datatable--header {
     color: $text-muted;
 }
 
-/* ── modals ─────────────────────────────────────────────────── */
+/* ── modals ──────────────────────────────────────────────────── */
 ModalScreen {
     align: center middle;
 }
 #dialog {
     width: 64;
     max-width: 90%;
-    height: auto;          /* size to content — compact card, not full screen */
+    height: auto;          /* size to content — a compact card */
     max-height: 90%;
-    padding: 1 2;
+    padding: 1 3;
     background: $surface;
-    border: thick $primary;
+    border: round $border;
 }
 #dialog.danger {
-    border: thick $error;
+    border: round $error;
 }
 #dialog .dialog-title {
     text-style: bold;
-    color: $primary;
+    color: $foreground;
     margin-bottom: 1;
 }
 #dialog.danger .dialog-title {
@@ -189,7 +195,7 @@ ModalScreen {
     margin-top: 1;
 }
 .help-key {
-    color: $primary;
+    color: $secondary;
     text-style: bold;
 }
 
@@ -204,29 +210,27 @@ ModalScreen {
     margin-top: 1;
 }
 
-/* ── login / onboarding ─────────────────────────────────────── */
+/* ── login / onboarding ──────────────────────────────────────── */
 LoginScreen {
     background: $background;
     align: center middle;
 }
 #login-card {
-    width: 72;
+    width: 64;
     max-width: 92%;
     height: auto;
-    padding: 1 2;
+    padding: 2 4;
     border: round $border;
     background: $surface;
-}
-#login-logo {
-    color: $primary;
-    text-align: center;
-    text-style: bold;
 }
 #login-wordmark {
     text-align: center;
     text-style: bold;
-    color: $secondary;
-    margin-top: 1;
+    color: $foreground;
+}
+#login-mark {
+    text-align: center;
+    margin-bottom: 1;
 }
 #login-tagline {
     text-align: center;
@@ -234,7 +238,7 @@ LoginScreen {
     margin-bottom: 1;
 }
 .login-section {
-    color: $accent;
+    color: $text-muted;
     text-style: bold;
     margin: 1 0 0 0;
 }

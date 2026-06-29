@@ -6,8 +6,6 @@ message (`ScopesPane.Selected`, `SecretsPane.Selected`) so the screen stays thin
 
 from __future__ import annotations
 
-import random
-import string
 import time
 from dataclasses import dataclass
 
@@ -19,20 +17,6 @@ from textual.message import Message
 from textual.widgets import DataTable, Label, ListItem, ListView, Static
 
 from ..domain import Acl, Scope, Secret
-
-PERM_COLOR = {"READ": "$secondary", "WRITE": "$success", "MANAGE": "$accent"}
-# A compact glyph for the current user's access on a scope.
-ACCESS_GLYPH = {
-    "MANAGE": "[$accent]★[/]",
-    "WRITE": "[$success]✎[/]",
-    "READ": "[$secondary]•[/]",
-}
-
-# A small isolinear-chip stack — greets you before anything is selected.
-CHIPS = """\
-[$secondary]      ▟▓▓▓▓▓▓▓▓▓▙[/]
-[$primary]      ▟▓▓▓▓▓▓▓▓▓▙[/]
-[$accent]      ▟▓▓▓▓▓▓▓▓▓▙[/]"""
 
 
 def fuzzy_match(query: str, text: str) -> bool:
@@ -83,7 +67,7 @@ class ScopesPane(Vertical):
         self._filter = ""
 
     def compose(self) -> ComposeResult:
-        yield Static("🔒  SCOPES", classes="pane-title", id="scopes-title")
+        yield Static("SCOPES", classes="pane-title", id="scopes-title")
         yield ListView(id="scopes-list")
         yield Static("", id="scopes-empty", classes="empty-hint")
 
@@ -103,9 +87,8 @@ class ScopesPane(Vertical):
         lv.clear()
         self._visible = [r for r in self._rows if fuzzy_match(self._filter, r.name)]
         for r in self._visible:
-            glyph = ACCESS_GLYPH.get(r.access, "")
-            lv.append(ListItem(Label(f"{r.icon}  {r.name}  [dim]{r.count}[/] {glyph}")))
-        self.query_one("#scopes-title", Static).update(f"🔒  SCOPES ({len(self._rows)})")
+            lv.append(ListItem(Label(f"{r.name}  [$text-muted]{r.count}[/]")))
+        self.query_one("#scopes-title", Static).update(f"SCOPES  {len(self._rows)}")
         lv.display = bool(self._visible)
         hint = self.query_one("#scopes-empty", Static)
         hint.display = not self._visible
@@ -143,8 +126,8 @@ class SecretsPane(Vertical):
         self._filter = ""
 
     def compose(self) -> ComposeResult:
-        yield Static("🔑  SECRETS", classes="pane-title", id="secrets-title")
-        table: DataTable = DataTable(id="secrets-table", zebra_stripes=True)
+        yield Static("SECRETS", classes="pane-title", id="secrets-title")
+        table: DataTable = DataTable(id="secrets-table", zebra_stripes=False)
         table.cursor_type = "row"
         yield table
         yield Static("", id="secrets-empty", classes="empty-hint")
@@ -167,18 +150,14 @@ class SecretsPane(Vertical):
         table.clear()
         visible = [s for s in self._secrets if fuzzy_match(self._filter, s.key)]
         for s in visible:
-            age, fresh = relative_age(s.last_updated_ms)
+            age, _ = relative_age(s.last_updated_ms)
             table.add_row(
                 s.key,
-                Text(s.last_updated, style="grey70"),
-                Text(age, style="#29e0c4" if fresh else "grey50"),
+                Text(s.last_updated, style="grey62"),
+                Text(age, style="grey50"),
                 key=s.key,
             )
-        title = (
-            f"🔑  SECRETS · {self._scope} ({len(visible)})"
-            if self._scope
-            else "🔑  SECRETS"
-        )
+        title = f"SECRETS  {self._scope} · {len(visible)}" if self._scope else "SECRETS"
         self.query_one("#secrets-title", Static).update(title)
         table.display = bool(visible)
         hint = self.query_one("#secrets-empty", Static)
@@ -188,7 +167,7 @@ class SecretsPane(Vertical):
                 hint.update(f"[$text-muted]No secret matches\n“{self._filter}”.[/]")
             else:
                 hint.update(
-                    f"[$text-muted]📭  “{self._scope}” is empty.\n"
+                    f"[$text-muted]“{self._scope}” is empty.\n"
                     "Press [b $primary]n[/] to add a secret.[/]"
                 )
 
@@ -196,7 +175,7 @@ class SecretsPane(Vertical):
         self._scope = ""
         self._secrets = []
         self.query_one(DataTable).clear()
-        self.query_one("#secrets-title", Static).update("🔑  SECRETS")
+        self.query_one("#secrets-title", Static).update("SECRETS")
         self.query_one("#secrets-empty").display = False
 
     def focus_table(self) -> None:
@@ -208,18 +187,14 @@ class SecretsPane(Vertical):
             self.post_message(self.Selected(event.row_key.value))
 
 
-_UNLOCK_POOL = string.ascii_letters + string.digits + "!@#$%^&*/.:_-+="
-
-
 class DetailPane(Vertical):
     """Right pane: metadata + ACLs for the selection, and the secret value."""
 
     def __init__(self) -> None:
         super().__init__(id="detail-pane", classes="pane")
-        self._unlock_timer = None
 
     def compose(self) -> ComposeResult:
-        yield Static("ℹ  DETAIL", classes="pane-title")
+        yield Static("DETAIL", classes="pane-title")
         with VerticalScroll():
             yield Static("", id="detail-body")
             yield Static("", id="detail-value", classes="secret-value")
@@ -227,48 +202,21 @@ class DetailPane(Vertical):
     def _body(self, markup: str) -> None:
         self.query_one("#detail-body", Static).update(markup)
 
-    def _stop_unlock(self) -> None:
-        if self._unlock_timer is not None:
-            self._unlock_timer.stop()
-            self._unlock_timer = None
-
     def _hide_value(self) -> None:
-        self._stop_unlock()
         self.query_one("#detail-value").display = False
 
     def show_value(self, value: str) -> None:
-        """Reveal the value with a left-to-right 'decrypt' animation."""
+        """Reveal the value instantly in the live (green) card."""
         card = self.query_one("#detail-value", Static)
         card.display = True
-        self._stop_unlock()
-        steps = max(4, min(len(value), 12))
-        state = {"n": 0}
-
-        def frame() -> None:
-            state["n"] += 1
-            shown = int(len(value) * state["n"] / steps)
-            if state["n"] >= steps:
-                card.update(f"[$accent b]🔓 {value}[/]")
-                self._stop_unlock()
-                return
-            out = "".join(
-                ch if (ch in " \n\t" or i < shown) else random.choice(_UNLOCK_POOL)
-                for i, ch in enumerate(value)
-            )
-            card.update(f"[$accent b]🔓 {out}[/]")
-
-        card.update(
-            f"[$accent b]🔓 {''.join(random.choice(_UNLOCK_POOL) for _ in value)}[/]"
-        )
-        self._unlock_timer = self.set_interval(0.03, frame)
+        card.update(value)
 
     def clear(self) -> None:
-        """The 'nothing selected' state — chips idle, standing by."""
+        """The 'nothing selected' state."""
         self._hide_value()
         self._body(
-            CHIPS
-            + "\n\n[$text-muted]   Standing by.[/]"
-            + "\n[$text-muted]   Select a scope to inspect.[/]"
+            "\n[$text-muted]Nothing selected.[/]"
+            "\n[$text-muted]Pick a scope on the left.[/]"
         )
 
     def show_scope(
@@ -276,27 +224,22 @@ class DetailPane(Vertical):
     ) -> None:
         self._hide_value()
         backend = "Azure Key Vault" if scope.is_keyvault else "Databricks-backed"
-        access_markup = (
-            f"[{PERM_COLOR.get(access, '$foreground')} b]{access}[/]"
-            if access != "—"
-            else "[$text-muted]none[/]"
-        )
+        access_text = access if access != "—" else "none"
         lines = [
-            f"[$primary b]{scope.icon}  {scope.name}[/]",
+            f"[b]{scope.name}[/]",
             "",
-            f"[$text-muted]backend[/]      [b]{backend}[/]",
-            f"[$text-muted]secrets[/]      [b]{secret_count}[/]",
-            f"[$text-muted]your access[/]  {access_markup}",
+            f"[$text-muted]Backend[/]      {backend}",
+            f"[$text-muted]Secrets[/]      {secret_count}",
+            f"[$text-muted]Your access[/]  {access_text}",
             "",
-            f"[$primary]👥 Permissions[/] [dim]({len(acls)})[/]",
+            f"[$text-muted]Permissions[/]  [dim]{len(acls)}[/]",
         ]
         if acls:
             for acl in acls:
-                color = PERM_COLOR.get(acl.permission, "$foreground")
-                lines.append(f"  [b]{acl.principal}[/] [{color}]{acl.permission}[/]")
+                lines.append(f"  {acl.principal}  [$text-muted]{acl.permission}[/]")
         else:
-            lines.append("  [$text-muted](none / not yet loaded)[/]")
-        lines += ["", "[dim]p to manage permissions[/]"]
+            lines.append("  [$text-muted](none)[/]")
+        lines += ["", "[$text-muted]p to manage permissions[/]"]
         self._body("\n".join(lines))
 
     def show_secret(
@@ -305,17 +248,23 @@ class DetailPane(Vertical):
         updated = secret.last_updated if secret else "—"
         age = relative_age(secret.last_updated_ms)[0] if secret else "—"
         lines = [
-            f"[$primary b]🔑  {key}[/]",
+            f"[b]{key}[/]",
             "",
-            f"[$text-muted]scope[/]     [b]{scope}[/]",
-            f"[$text-muted]updated[/]   [b]{updated}[/] [dim]({age} ago)[/]",
+            f"[$text-muted]Scope[/]     {scope}",
+            f"[$text-muted]Updated[/]   {updated} [dim]({age} ago)[/]",
             "",
         ]
         if value is not None:
-            lines.append("[$text-muted]value[/]   [dim]space to hide · c to copy[/]")
+            lines += [
+                "[$text-muted]Value[/]     [$accent]revealed[/]",
+                "[dim]space to hide · c to copy[/]",
+            ]
             self._body("\n".join(lines))
             self.show_value(value)
         else:
-            lines.append("[$text-muted]value[/]   [dim]•••••••• · space to reveal[/]")
+            lines += [
+                "[$text-muted]Value[/]     [dim]••••••••[/]",
+                "[dim]space to reveal[/]",
+            ]
             self._hide_value()
             self._body("\n".join(lines))

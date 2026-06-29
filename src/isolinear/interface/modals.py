@@ -155,7 +155,7 @@ class HelpScreen(ModalScreen[None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
-            yield Static("ISOLINEAR — keys", classes="dialog-title")
+            yield Static("Isolinear — keys", classes="dialog-title")
             with VerticalScroll():
                 for key, desc in self.KEYS:
                     yield Static(f"[b $primary]{key:<12}[/]  {desc}")
@@ -184,7 +184,7 @@ class AuthScreen(ModalScreen[None]):
                 else "✗ not authenticated"
             )
             yield Static(f"[$text-muted]Identity[/]  [b]{who}[/]   [$primary]{status}[/]")
-            table: DataTable = DataTable(id="auth-table", zebra_stripes=True)
+            table: DataTable = DataTable(id="auth-table", zebra_stripes=False)
             table.cursor_type = "row"
             table.add_columns("Scope", "My access", "ACLs", "Write", "Manage")
             for s in self._summaries:
@@ -279,9 +279,9 @@ class PermissionsScreen(ModalScreen[None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
-            yield Static(f"Permissions · scope “{self._scope}”", classes="dialog-title")
+            yield Static(f"Permissions — {self._scope}", classes="dialog-title")
             yield Static("[$text-muted]a add · e change · d remove · esc close[/]")
-            table: DataTable = DataTable(id="acl-table", zebra_stripes=True)
+            table: DataTable = DataTable(id="acl-table", zebra_stripes=False)
             table.cursor_type = "row"
             table.add_columns("Principal", "Permission")
             yield table

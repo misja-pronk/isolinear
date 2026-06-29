@@ -58,17 +58,17 @@ class MainScreen(Screen[None]):
     COMMANDS = {IsolinearCommands}
 
     BINDINGS = [
-        Binding("w", "switch_workspace", "Workspace"),
+        Binding("w", "switch_workspace", "Workspace", show=False),
         Binding("n", "new_secret", "New"),
         Binding("N", "new_scope", "New scope", show=False),
-        Binding("e", "edit_secret", "Edit"),
-        Binding("d", "delete", "Delete"),
-        Binding("p", "permissions", "Perms"),
+        Binding("e", "edit_secret", "Edit", show=False),
+        Binding("d", "delete", "Delete", show=False),
+        Binding("p", "permissions", "Perms", show=False),
         Binding("space", "reveal", "Reveal"),
         Binding("c", "copy", "Copy"),
-        Binding("r", "refresh_scope", "Refresh"),
+        Binding("r", "refresh_scope", "Refresh", show=False),
         Binding("R", "refresh_workspace", "Refresh all", show=False),
-        Binding("a", "auth", "Auth"),
+        Binding("a", "auth", "Auth", show=False),
         Binding("slash", "filter", "Filter"),
         Binding("question_mark", "help", "Help"),
         Binding("escape", "cancel_filter", "Clear filter", show=False),
@@ -92,13 +92,12 @@ class MainScreen(Screen[None]):
         self.current_secret: str | None = None
         self._revealed: tuple[str, str] | None = None
         self._status_text: str = ""
-        self._status_dot: tuple[str, str] = ("●", "$success")
         self._filter_target: str | None = None  # "scopes" | "secrets" while filtering
 
     # ── layout ─────────────────────────────────────────────────────────
     def compose(self) -> ComposeResult:
         with Horizontal(id="banner"):
-            yield Static("▦ ISOLINEAR", id="brand")
+            yield Static("Isolinear", id="brand")
             yield Static("", id="breadcrumb")
             yield Static("", id="ws-status")
         with Horizontal(id="body"):
@@ -133,45 +132,26 @@ class MainScreen(Screen[None]):
         assert self.session is not None, "no active session"
         return self.session
 
-    # status-bar identity + seal indicator
-    _SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
-    _WARM_LINES = [
-        "initializing isolinear core",
-        "aligning the chips",
-        "indexing optical storage",
-        "running level-1 diagnostic",
-        "establishing subspace link",
-        "powering the matrix",
-    ]
-
-    def _set_status(self, text: str, *, dot: str = "●", color: str = "$success") -> None:
+    def _set_status(self, text: str, *, color: str = "$text-muted") -> None:
         self._status_text = text
-        self._status_dot = (dot, color)
-        self._render_status()
+        self.query_one("#ws-status", Static).update(f"[{color}]{text}[/]")
 
     def _render_status(self) -> None:
         widget = self.query_one("#ws-status", Static)
         if self.session is None:
-            widget.update("[$text-muted]not connected · press w to sign in[/]")
+            widget.update("[$text-muted]Not connected — press w to sign in[/]")
             return
-        dot, color = self._status_dot
         user = self._sess.identity.user_name or "—"
-        seal = (
-            "[b $accent]🔓 unsealed[/]" if self._revealed else "[$text-muted]🔒 sealed[/]"
-        )
-        widget.update(
-            f"[{color}]{dot}[/] [b]{user}[/]  ·  {self._sess.label}"
-            f"  ·  {self._status_text}  ·  {seal}"
-        )
+        widget.update(f"[$text-muted]{user}  ·  {self._sess.label}[/]")
 
     def _render_breadcrumb(self) -> None:
         bc = self.query_one("#breadcrumb", Static)
         parts: list[str] = []
         if self.current_scope:
-            parts.append(f"[b $primary]{self.current_scope}[/]")
+            parts.append(f"[$text-muted]{self.current_scope}[/]")
         if self.current_secret:
-            parts.append(f"[$accent]{self.current_secret}[/]")
-        bc.update("  [dim]▸[/]  ".join(parts))
+            parts.append(f"[b]{self.current_secret}[/]")
+        bc.update("  [dim]/[/]  ".join(parts))
 
     # ── scope view models + filtering ───────────────────────────────────
     def _scope_rows(self) -> list[ScopeRow]:
@@ -281,38 +261,33 @@ class MainScreen(Screen[None]):
         self.secrets_pane.clear()
         self.detail_pane.clear()
         self._render_breadcrumb()
-        self._set_status("establishing subspace link…", dot="◐", color="$accent")
+        self._set_status("Connecting…")
 
         identity = await asyncio.to_thread(session.authenticate)
         if not identity.authenticated:
             self._set_status(
-                f"[$error]access denied[/] · {identity.error}", dot="○", color="$error"
+                f"[$error]Access denied[/] — {identity.error}", color="$error"
             )
             return
-        self._set_status("scanning the array…", dot="◐", color="$accent")
+        self._set_status("Loading scopes…")
 
         try:
             scopes = await asyncio.to_thread(session.load_scopes)
         except StoreError as exc:
-            self._set_status(f"[$error]{exc}[/]", dot="○", color="$error")
+            self._set_status(f"[$error]{exc}[/]", color="$error")
             return
         self.scopes_pane.show(self._scope_rows())
 
         total = len(scopes)
         for i, scope in enumerate(scopes, 1):
             await asyncio.to_thread(session.warm_scope, scope.name)
-            spin = self._SPINNER[i % len(self._SPINNER)]
-            line = self._WARM_LINES[i % len(self._WARM_LINES)]
-            filled = round(i / total * 10)
-            bar = f"[$primary]{'▰' * filled}[/][$panel]{'▱' * (10 - filled)}[/]"
-            self._set_status(f"{line}…  {bar} {i}/{total}", dot=spin, color="$accent")
+            self._set_status(f"Loading… {i}/{total}")
             if scope.name == self.current_scope:
                 self._show_scope(scope.name)
 
         # refresh rows now that counts + access are warmed
         self.scopes_pane.show(self._scope_rows(), keep=self.current_scope, focus=False)
-        plural = "scope" if total == 1 else "scopes"
-        self._set_status(f"{total} {plural} online", dot="●", color="$success")
+        self._render_status()
 
     # ── selection → render ──────────────────────────────────────────────
     def _show_scope(self, name: str) -> None:
@@ -437,7 +412,7 @@ class MainScreen(Screen[None]):
             self.notify(f"Create scope failed: {exc}", severity="error")
             return
         self.scopes_pane.show(self._scope_rows(), keep=name)
-        self.notify(f"🔒 Scope “{name}” created.")
+        self.notify(f"Scope “{name}” created.")
 
     def action_new_secret(self) -> None:
         if not (self.session and self.current_scope):
@@ -469,7 +444,7 @@ class MainScreen(Screen[None]):
         if scope == self.current_scope:
             self._show_scope(scope)
         self.scopes_pane.show(self._scope_rows(), keep=self.current_scope, focus=False)
-        self.notify(f"🔑 Secret “{key}” saved.")
+        self.notify(f"Secret “{key}” saved.")
 
     def action_delete(self) -> None:
         focused_id = getattr(self.focused, "id", None)
@@ -557,7 +532,7 @@ class MainScreen(Screen[None]):
         cached = self._sess.cached_value(*target)
         if cached is not None:
             self.app.copy_to_clipboard(cached)
-            self.notify(f"📋 Copied “{target[1]}” to clipboard.")
+            self.notify(f"Copied “{target[1]}” to clipboard.")
         else:
             self._copy_fetch(target)
 
@@ -570,7 +545,7 @@ class MainScreen(Screen[None]):
             self.notify(f"Cannot read value: {exc}", severity="error")
             return
         self.app.copy_to_clipboard(value)
-        self.notify(f"📋 Copied “{target[1]}” to clipboard.")
+        self.notify(f"Copied “{target[1]}” to clipboard.")
 
     # ── refresh (US-15) ─────────────────────────────────────────────────
     def action_refresh_scope(self) -> None:
@@ -579,12 +554,12 @@ class MainScreen(Screen[None]):
 
     @work(group="refresh")
     async def _refresh_scope(self, name: str) -> None:
-        self._set_status(f"refreshing {name}…")
+        self._set_status(f"Refreshing {name}…")
         await asyncio.to_thread(self._sess.refresh_scope, name)
         if name == self.current_scope:
             self._show_scope(name)
         self.scopes_pane.show(self._scope_rows(), keep=self.current_scope, focus=False)
-        self._set_status(f"{self._sess.identity.user_name} · refreshed {name}")
+        self._render_status()
 
     def action_refresh_workspace(self) -> None:
         if self.session:

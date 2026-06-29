@@ -80,6 +80,11 @@ root = ["src"]
 # tests import sibling modules (e.g. `fakes`) the way pytest runs them
 extra-paths = ["tests"]
 
+[tool.ty.src]
+# docs/redesign holds mockup-rendering scripts that use an out-of-project lib
+# (Pillow, via `uv run --with`); they aren't shipped code, so don't type-check them.
+exclude = ["docs"]
+
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 

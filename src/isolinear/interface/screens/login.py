@@ -23,15 +23,6 @@ from textual.widgets import Button, Input, Label, ListItem, ListView, Select, St
 from ...application import Connection, OnboardingService
 from ...domain import CLOUDS, AccountSession, AccountWorkspace, AuthError, Workspace
 
-# A stack of lit isolinear optical chips, LCARS colours.
-LOGO = """\
-[$secondary]   ▟▓▓▓▓▓▓▓▓▓▓▓▓▙[/]
-[$secondary]   ▜▓▓▓▓▓▓▓▓▓▓▓▓▛[/]
-[$primary]   ▟▓▓▓▓▓▓▓▓▓▓▓▓▙[/]
-[$primary]   ▜▓▓▓▓▓▓▓▓▓▓▓▓▛[/]
-[$accent]   ▟▓▓▓▓▓▓▓▓▓▓▓▓▙[/]
-[$accent]   ▜▓▓▓▓▓▓▓▓▓▓▓▓▛[/]"""
-
 
 @dataclass
 class ConnectResult:
@@ -169,24 +160,22 @@ class LoginScreen(Screen[ConnectResult | None]):
 
     def compose(self) -> ComposeResult:
         with Center(), Vertical(id="login-card"):
-            yield Static(LOGO, id="login-logo")
-            yield Static("I S O L I N E A R", id="login-wordmark")
+            yield Static("Isolinear", id="login-wordmark")
+            yield Static("[$primary]▂▂[/][$success]▂▂[/][$warning]▂▂[/]", id="login-mark")
             yield Static(
-                "[$text-muted]Databricks secret manager · "
-                "[i]optical storage for your secrets[/][/]",
-                id="login-tagline",
+                "[$text-muted]Databricks secret management[/]", id="login-tagline"
             )
             if self._profiles:
-                yield Static("Saved workspaces", classes="login-section")
+                yield Static("SAVED WORKSPACES", classes="login-section")
                 yield ListView(
                     *[ListItem(Label(p.label)) for p in self._profiles],
                     id="profiles",
                 )
-            yield Static("Or connect", classes="login-section")
+            yield Static("CONNECT", classes="login-section")
             with Horizontal(id="login-actions"):
-                yield Button("🔗  Workspace URL", id="btn-url", variant="primary")
-                yield Button("🏢  Discover via account", id="btn-account")
-                yield Button("Quit", id="btn-quit", variant="error")
+                yield Button("Workspace URL", id="btn-url", variant="primary")
+                yield Button("Discover via account", id="btn-account")
+                yield Button("Quit", id="btn-quit")
             yield Static("", id="login-status")
 
     def on_mount(self) -> None:
