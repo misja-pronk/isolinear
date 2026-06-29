@@ -124,6 +124,8 @@ class SecretsPane(Vertical):
         self._scope = ""
         self._secrets: list[Secret] = []
         self._filter = ""
+        self._sort_col = 0  # column index: 0=Key, 1=Updated, 2=Age
+        self._sort_rev = False
 
     def compose(self) -> ComposeResult:
         yield Static("SECRETS", classes="pane-title", id="secrets-title")
@@ -131,9 +133,6 @@ class SecretsPane(Vertical):
         table.cursor_type = "row"
         yield table
         yield Static("", id="secrets-empty", classes="empty-hint")
-
-    def on_mount(self) -> None:
-        self.query_one(DataTable).add_columns("Key", "Updated", "Age")
 
     def show(self, scope: str, secrets: list[Secret]) -> None:
         self._scope = scope
@@ -147,8 +146,17 @@ class SecretsPane(Vertical):
 
     def _rebuild(self) -> None:
         table = self.query_one(DataTable)
-        table.clear()
-        visible = [s for s in self._secrets if fuzzy_match(self._filter, s.key)]
+        table.clear(columns=True)
+        arrow = "↓" if self._sort_rev else "↑"
+        table.add_columns(
+            *(
+                f"{name} {arrow}" if i == self._sort_col else name
+                for i, name in enumerate(("Key", "Updated", "Age"))
+            )
+        )
+        visible = self._sorted(
+            [s for s in self._secrets if fuzzy_match(self._filter, s.key)]
+        )
         for s in visible:
             age, _ = relative_age(s.last_updated_ms)
             table.add_row(
@@ -185,6 +193,35 @@ class SecretsPane(Vertical):
     def _highlighted(self, event: DataTable.RowHighlighted) -> None:
         if event.row_key is not None and event.row_key.value:
             self.post_message(self.Selected(event.row_key.value))
+
+    # ── sorting: click a column header, or cycle with the `s` key ──────
+    @on(DataTable.HeaderSelected, "#secrets-table")
+    def _header_clicked(self, event: DataTable.HeaderSelected) -> None:
+        self._set_sort(event.column_index)
+
+    def cycle_sort(self) -> None:
+        """Keyboard sort: flip direction, then advance to the next column."""
+        if not self._sort_rev:
+            self._sort_rev = True
+        else:
+            self._sort_rev = False
+            self._sort_col = (self._sort_col + 1) % 3
+        self._rebuild()
+
+    def _set_sort(self, col: int) -> None:
+        if col == self._sort_col:
+            self._sort_rev = not self._sort_rev
+        else:
+            self._sort_col, self._sort_rev = col, False
+        self._rebuild()
+
+    def _sorted(self, secrets: list[Secret]) -> list[Secret]:
+        if self._sort_col == 0:  # Key — alphabetical
+            return sorted(secrets, key=lambda s: s.key.lower(), reverse=self._sort_rev)
+        # Updated / Age — by timestamp
+        return sorted(
+            secrets, key=lambda s: s.last_updated_ms or 0, reverse=self._sort_rev
+        )
 
 
 class DetailPane(Vertical):

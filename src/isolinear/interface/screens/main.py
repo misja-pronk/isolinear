@@ -14,7 +14,7 @@ from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.command import DiscoveryHit, Hit, Hits, Provider
-from textual.containers import Horizontal
+from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import DataTable, Footer, Input, ListView, Static
 
@@ -69,6 +69,7 @@ class MainScreen(Screen[None]):
         Binding("r", "refresh_scope", "Refresh", show=False),
         Binding("R", "refresh_workspace", "Refresh all", show=False),
         Binding("a", "auth", "Auth", show=False),
+        Binding("s", "sort_secrets", "Sort", show=False),
         Binding("slash", "filter", "Filter"),
         Binding("question_mark", "help", "Help"),
         Binding("escape", "cancel_filter", "Clear filter", show=False),
@@ -96,16 +97,17 @@ class MainScreen(Screen[None]):
 
     # ── layout ─────────────────────────────────────────────────────────
     def compose(self) -> ComposeResult:
-        with Horizontal(id="banner"):
-            yield Static("Isolinear", id="brand")
-            yield Static("", id="breadcrumb")
-            yield Static("", id="ws-status")
-        with Horizontal(id="body"):
-            yield ScopesPane()
-            yield SecretsPane()
-            yield DetailPane()
-        yield Input(id="filter-bar", placeholder="filter…")
-        yield Footer(show_command_palette=False)
+        with Vertical(id="app-frame"):
+            with Horizontal(id="banner"):
+                yield Static("Isolinear", id="brand")
+                yield Static("", id="breadcrumb")
+                yield Static("", id="ws-status")
+            with Horizontal(id="body"):
+                yield ScopesPane()
+                yield SecretsPane()
+                yield DetailPane()
+            yield Input(id="filter-bar", placeholder="filter…")
+            yield Footer(show_command_palette=False)
 
     def on_mount(self) -> None:
         if self.session is not None:
@@ -357,6 +359,10 @@ class MainScreen(Screen[None]):
             row = 0 if where == "top" else widget.row_count - 1
             widget.move_cursor(row=row)
 
+    def action_sort_secrets(self) -> None:
+        if getattr(self.focused, "id", None) == "secrets-table":
+            self.secrets_pane.cycle_sort()
+
     # ── command palette ─────────────────────────────────────────────────
     def command_catalog(self) -> list[tuple[str, object]]:
         return [
@@ -367,6 +373,7 @@ class MainScreen(Screen[None]):
             ("Manage scope permissions", self.action_permissions),
             ("Reveal secret value", self.action_reveal),
             ("Copy secret value", self.action_copy),
+            ("Sort secrets", self.action_sort_secrets),
             ("Refresh scope", self.action_refresh_scope),
             ("Refresh workspace", self.action_refresh_workspace),
             ("Authorization overview", self.action_auth),

@@ -6,6 +6,14 @@
 Screen {
     background: $background;
     color: $foreground;
+    padding: 1 2;
+}
+
+/* the whole UI sits in one rounded frame: header · body · footer */
+#app-frame {
+    height: 1fr;
+    border: round $border;
+    background: $background;
 }
 
 /* toasts — quiet card, hairline border */
@@ -18,9 +26,9 @@ Toast.-error {
     border: round $error;
 }
 
-/* footer — quiet bar; only the key letters carry colour */
+/* footer — the bottom chrome bar; only the key letters carry colour */
 Footer {
-    background: $background;
+    background: $panel;
 }
 Footer > .footer-key--key {
     color: $secondary;
@@ -64,17 +72,16 @@ Button.-error:focus {
     background: $error-lighten-1;
 }
 
-/* ── top bar ─────────────────────────────────────────────────── */
+/* ── header bar ──────────────────────────────────────────────── */
 #banner {
     height: 1;
-    background: $background;
-    padding: 0 1;
-    margin-bottom: 1;
+    background: $panel;
+    padding: 0 2;
 }
 #banner #brand {
     width: auto;
     padding: 0 2 0 0;
-    color: $foreground;
+    color: $secondary;
     text-style: bold;
 }
 #banner #breadcrumb {
@@ -99,22 +106,21 @@ Button.-error:focus {
 /* ── three-pane body ─────────────────────────────────────────── */
 #body {
     height: 1fr;
-    padding: 0 1;
 }
 
 .pane {
-    border: round $border;
     height: 1fr;
-    padding: 1 1 0 1;
-    margin-right: 2;
+    padding: 1 2 0 2;
+    border-right: solid $border;  /* thin divider between panes */
 }
 #detail-pane {
-    margin-right: 0;
+    border-right: none;
 }
+/* the active pane lifts to $surface */
 .pane:focus-within {
-    border: round $primary;
+    background: $surface;
 }
-/* quiet label header — brightens when the pane is focused */
+/* quiet label header — brightens to the accent when the pane is active */
 .pane-title {
     dock: top;
     height: 1;
@@ -124,7 +130,8 @@ Button.-error:focus {
     text-style: bold;
 }
 .pane:focus-within .pane-title {
-    color: $foreground;
+    color: $secondary;
+    text-style: bold;
 }
 
 #scopes-pane { width: 26; }
@@ -151,6 +158,7 @@ ListView:focus > ListItem.-highlight {
 DataTable {
     background: transparent;
     height: 1fr;
+    scrollbar-size-horizontal: 0;  /* short columns never need it */
 }
 DataTable > .datatable--cursor {
     background: $primary 18%;
