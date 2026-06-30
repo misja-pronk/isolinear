@@ -7,6 +7,11 @@ on:
       - "docs/**"
       - "mkdocs.yml"
       - ".github/workflows/docs.yml"
+  pull_request:
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - ".github/workflows/docs.yml"
   workflow_dispatch:
 
 # allow the GITHUB_TOKEN to deploy to Pages, and serialise deploys
@@ -37,6 +42,7 @@ jobs:
   deploy:
     name: deploy to Pages
     needs: build
+    if: github.event_name != 'pull_request' # build-only on PRs; deploy from main
     runs-on: ubuntu-latest
     environment:
       name: github-pages
