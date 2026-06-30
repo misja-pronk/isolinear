@@ -13,7 +13,11 @@ from textual.app import App
 from textual.binding import Binding
 
 from .application import OnboardingService, WorkspaceService
-from .infrastructure import DatabricksCfgProfileStore, DatabricksConnector
+from .infrastructure import (
+    DatabricksBundleStore,
+    DatabricksCfgProfileStore,
+    DatabricksConnector,
+)
 from .interface.screens.main import MainScreen
 from .interface.theme import ISOLINEAR_THEMES
 
@@ -21,7 +25,7 @@ from .interface.theme import ISOLINEAR_THEMES
 class IsolinearApp(App[None]):
     CSS_PATH = "styles.tcss"
     TITLE = "Isolinear"
-    BINDINGS = [Binding("q", "quit", "Quit")]
+    BINDINGS = [Binding("q", "quit", "Quit", show=False)]
 
     def __init__(
         self,
@@ -32,12 +36,25 @@ class IsolinearApp(App[None]):
         self._onboarding = onboarding
         self._initial_session = session
 
+    def get_theme_variable_defaults(self) -> dict[str, str]:
+        # The stylesheet is parsed under Textual's default theme before ours is
+        # applied, so the per-section accents must resolve there too. Each
+        # Isolinear theme overrides these with its own values.
+        return {
+            **super().get_theme_variable_defaults(),
+            "scopes-color": "#8b7cff",
+            "secrets-color": "#4ec9e0",
+            "detail-color": "#e0b24a",
+        }
+
     def on_mount(self) -> None:
         for theme in ISOLINEAR_THEMES:
             self.register_theme(theme)
         self.theme = "isolinear"
         onboarding = self._onboarding or OnboardingService(
-            DatabricksConnector(), DatabricksCfgProfileStore()
+            DatabricksConnector(),
+            DatabricksCfgProfileStore(),
+            DatabricksBundleStore(),
         )
         self.push_screen(MainScreen(onboarding, self._initial_session))
 

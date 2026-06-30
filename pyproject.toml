@@ -36,6 +36,7 @@ classifiers = [
 dependencies = [
     "textual>=2.0",
     "databricks-sdk>=0.30",
+    "pyyaml>=6.0.3",
 ]
 
 [project.urls]
@@ -62,6 +63,10 @@ dev = [
     "pytest-asyncio>=0.24",
     "ruff>=0.6",
     "ty>=0.0.1a1",
+    "types-pyyaml>=6.0.12.20260518",
+]
+docs = [
+    "mkdocs-material>=9.7.5",
 ]
 
 [tool.pytest.ini_options]
@@ -79,6 +84,11 @@ python-version = "3.11"
 root = ["src"]
 # tests import sibling modules (e.g. `fakes`) the way pytest runs them
 extra-paths = ["tests"]
+
+[tool.ty.src]
+# docs/redesign holds mockup-rendering scripts that use an out-of-project lib
+# (Pillow, via `uv run --with`); they aren't shipped code, so don't type-check them.
+exclude = ["docs"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]

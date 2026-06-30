@@ -1,11 +1,15 @@
-"""Login & onboarding: a takeover screen with two doors —
+"""Login & onboarding.
 
-  1. Connect with a workspace URL  (OAuth browser login)
-  2. Discover workspaces in my account  (account OAuth -> list -> pick)
+One clear list of workspaces — each tagged with where it came from — plus a way
+to add one by URL:
 
-plus a list of saved profiles for one-keypress reconnect. The blocking auth
-calls run in worker threads; the screen narrates progress and finally dismisses
-with a ConnectResult the app turns into a live session.
+  * a Databricks Asset Bundle (`databricks.yml`) in the working dir → the default
+  * every profile in `~/.databrickscfg`
+  * a workspace URL you type in (OAuth browser sign-in)
+
+Connecting a saved profile is instant; a bundle target or a typed URL opens the
+browser. The blocking auth runs in a worker thread; the screen narrates progress
+and dismisses with a ConnectResult the app turns into a live session.
 """
 
 from __future__ import annotations
@@ -13,24 +17,16 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 
+from rich.markup import escape
 from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Center, Horizontal, Vertical
 from textual.screen import ModalScreen, Screen
-from textual.widgets import Button, Input, Label, ListItem, ListView, Select, Static
+from textual.widgets import Button, DataTable, Input, Static
 
 from ...application import Connection, OnboardingService
-from ...domain import CLOUDS, AccountSession, AccountWorkspace, AuthError, Workspace
-
-# A stack of lit isolinear optical chips, LCARS colours.
-LOGO = """\
-[$secondary]   ▟▓▓▓▓▓▓▓▓▓▓▓▓▙[/]
-[$secondary]   ▜▓▓▓▓▓▓▓▓▓▓▓▓▛[/]
-[$primary]   ▟▓▓▓▓▓▓▓▓▓▓▓▓▙[/]
-[$primary]   ▜▓▓▓▓▓▓▓▓▓▓▓▓▛[/]
-[$accent]   ▟▓▓▓▓▓▓▓▓▓▓▓▓▙[/]
-[$accent]   ▜▓▓▓▓▓▓▓▓▓▓▓▓▛[/]"""
+from ...domain import SOURCE_PROFILE, AuthError, Workspace
 
 
 @dataclass
@@ -38,6 +34,10 @@ class ConnectResult:
     connection: Connection
     save: bool = False
     save_name: str = ""
+
+
+def _trunc(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
 class WorkspaceUrlModal(ModalScreen[tuple[str, str] | None]):
@@ -77,138 +77,101 @@ class WorkspaceUrlModal(ModalScreen[tuple[str, str] | None]):
         self.dismiss(None)
 
 
-class AccountModal(ModalScreen[tuple[str, str, str] | None]):
-    """Ask for cloud + account ID (+ optional profile name to save)."""
-
-    BINDINGS = [Binding("escape", "cancel", "Cancel")]
-
-    def compose(self) -> ComposeResult:
-        with Vertical(id="dialog"):
-            yield Static("Discover workspaces in my account", classes="dialog-title")
-            yield Static(
-                "[$text-muted]Pick your cloud and paste your Account ID "
-                "(from the Databricks account console).[/]"
-            )
-            yield Select(
-                [(c.label, c.key) for c in CLOUDS],
-                prompt="Cloud",
-                id="f-cloud",
-                value=CLOUDS[0].key,
-            )
-            yield Input(placeholder="account id (UUID)", id="f-account")
-            yield Input(placeholder="save as profile name (optional)", id="f-save")
-            with Horizontal(classes="buttons"):
-                yield Button("Cancel", id="cancel")
-                yield Button("Discover", id="ok", variant="primary")
-
-    def on_mount(self) -> None:
-        self.query_one("#f-account", Input).focus()
-
-    @on(Button.Pressed, "#ok")
-    def _ok(self) -> None:
-        cloud = self.query_one("#f-cloud", Select).value
-        account = self.query_one("#f-account", Input).value.strip()
-        if cloud is Select.BLANK or not account:
-            self.query_one("#f-account", Input).focus()
-            return
-        save_name = self.query_one("#f-save", Input).value.strip()
-        self.dismiss((str(cloud), account, save_name))
-
-    @on(Button.Pressed, "#cancel")
-    def action_cancel(self) -> None:
-        self.dismiss(None)
-
-
-class DiscoveredPicker(ModalScreen[AccountWorkspace | None]):
-    """Pick one of the workspaces discovered in the account."""
-
-    BINDINGS = [Binding("escape", "cancel", "Cancel")]
-
-    def __init__(self, workspaces: list[AccountWorkspace]) -> None:
-        super().__init__()
-        self._workspaces = workspaces
-
-    def compose(self) -> ComposeResult:
-        with Vertical(id="dialog"):
-            yield Static(
-                f"Found {len(self._workspaces)} workspace(s)", classes="dialog-title"
-            )
-            yield ListView(
-                *[ListItem(Label(w.label)) for w in self._workspaces],
-                id="picker-list",
-            )
-
-    def on_mount(self) -> None:
-        self.query_one("#picker-list", ListView).focus()
-
-    @on(ListView.Selected)
-    def _pick(self, event: ListView.Selected) -> None:
-        idx = event.list_view.index or 0
-        self.dismiss(self._workspaces[idx])
-
-    def action_cancel(self) -> None:
-        self.dismiss(None)
-
-
 class LoginScreen(Screen[ConnectResult | None]):
-    """The onboarding hub."""
+    """The onboarding hub: pick a workspace, or add one by URL."""
 
-    BINDINGS = [Binding("escape", "back", "Back", show=False)]
+    BINDINGS = [
+        Binding("escape", "back", "Back", show=False),
+        Binding("u", "add_url", "Add by URL", show=False),
+    ]
 
     def __init__(
         self,
-        profiles: list[Workspace],
+        workspaces: list[Workspace],
         onboarding: OnboardingService,
         can_cancel: bool = False,
     ) -> None:
         super().__init__()
-        self._profiles = profiles
+        self._workspaces = workspaces
         self._onboarding = onboarding
         self._can_cancel = can_cancel
-        self._account_session: AccountSession | None = None  # between discover -> pick
 
     def compose(self) -> ComposeResult:
-        with Center(), Vertical(id="login-card"):
-            yield Static(LOGO, id="login-logo")
-            yield Static("I S O L I N E A R", id="login-wordmark")
+        card_classes = "browse" if self._workspaces else ""
+        with Center(), Vertical(id="login-card", classes=card_classes):
+            yield Static("Isolinear", id="login-wordmark")
+            yield Static("[$primary]▂▂[/][$success]▂▂[/][$warning]▂▂[/]", id="login-mark")
             yield Static(
-                "[$text-muted]Databricks secret manager · "
-                "[i]optical storage for your secrets[/][/]",
-                id="login-tagline",
+                "[$text-muted]Databricks secret management[/]", id="login-tagline"
             )
-            if self._profiles:
-                yield Static("Saved workspaces", classes="login-section")
-                yield ListView(
-                    *[ListItem(Label(p.label)) for p in self._profiles],
-                    id="profiles",
+            if self._workspaces:
+                yield Static("WORKSPACES", classes="login-section")
+                table: DataTable = DataTable(id="ws-table", zebra_stripes=False)
+                table.cursor_type = "row"
+                yield table
+            else:
+                yield Static("GET STARTED", classes="login-section")
+                yield Static(
+                    "[$text-muted]No bundle or saved profiles found here.\n"
+                    "Connect to a workspace by URL to begin.[/]",
+                    id="login-empty",
                 )
-            yield Static("Or connect", classes="login-section")
             with Horizontal(id="login-actions"):
-                yield Button("🔗  Workspace URL", id="btn-url", variant="primary")
-                yield Button("🏢  Discover via account", id="btn-account")
-                yield Button("Quit", id="btn-quit", variant="error")
+                yield Button(
+                    "Add by URL",
+                    id="btn-url",
+                    variant="default" if self._workspaces else "primary",
+                )
+                yield Button("Quit", id="btn-quit")
             yield Static("", id="login-status")
 
     def on_mount(self) -> None:
-        if self._profiles:
-            self.query_one("#profiles", ListView).focus()
+        if self._workspaces:
+            self._populate()
+            self.query_one("#ws-table", DataTable).focus()
         else:
             self.query_one("#btn-url", Button).focus()
+
+    def _populate(self) -> None:
+        table = self.query_one("#ws-table", DataTable)
+        table.add_columns("Workspace", "Host", "Source")
+        default_row = 0
+        for i, ws in enumerate(self._workspaces):
+            table.add_row(ws.name, _trunc(ws.host_label, 30), ws.source_label, key=str(i))
+            if ws.default:
+                default_row = i
+        table.move_cursor(row=default_row)
 
     def _status(self, text: str) -> None:
         self.query_one("#login-status", Static).update(text)
 
-    # -- saved profiles -------------------------------------------------
-    @on(ListView.Selected, "#profiles")
-    def _pick_profile(self, event: ListView.Selected) -> None:
-        profile = self._profiles[event.list_view.index or 0]
-        connection = self._onboarding.connect_profile(profile.profile)
+    # -- connect a listed workspace -------------------------------------
+    @on(DataTable.RowSelected, "#ws-table")
+    def _row_selected(self, event: DataTable.RowSelected) -> None:
+        idx = event.cursor_row
+        if 0 <= idx < len(self._workspaces):
+            self._connect(self._workspaces[idx])
+
+    @work(group="login")
+    async def _connect(self, ws: Workspace) -> None:
+        opening = (
+            "" if ws.source == SOURCE_PROFILE and ws.profile else " (opening browser)"
+        )
+        self._status(f"[$accent]Connecting to {escape(ws.name)}…{opening}[/]")
+        try:
+            connection = await asyncio.to_thread(self._onboarding.connect, ws)
+        except AuthError as exc:
+            self._status(f"[$error]Connection failed:[/] {escape(str(exc))}")
+            return
         self.dismiss(ConnectResult(connection=connection))
 
-    # -- workspace URL --------------------------------------------------
+    # -- add by URL -----------------------------------------------------
+    def action_add_url(self) -> None:
+        self.app.push_screen(WorkspaceUrlModal(), self._after_url_form)
+
     @on(Button.Pressed, "#btn-url")
     def _url(self) -> None:
-        self.app.push_screen(WorkspaceUrlModal(), self._after_url_form)
+        self.action_add_url()
 
     def _after_url_form(self, result: tuple[str, str] | None) -> None:
         if result:
@@ -222,59 +185,6 @@ class LoginScreen(Screen[ConnectResult | None]):
             connection = await asyncio.to_thread(self._onboarding.connect_url, host)
         except AuthError as exc:
             self._status(f"[$error]Sign-in failed:[/] {exc}")
-            return
-        self.dismiss(
-            ConnectResult(
-                connection=connection, save=bool(save_name), save_name=save_name
-            )
-        )
-
-    # -- account discovery ----------------------------------------------
-    @on(Button.Pressed, "#btn-account")
-    def _account(self) -> None:
-        self.app.push_screen(AccountModal(), self._after_account_form)
-
-    def _after_account_form(self, result: tuple[str, str, str] | None) -> None:
-        if result:
-            cloud, account_id, save_name = result
-            self._do_discover(cloud, account_id, save_name)
-
-    @work(group="login")
-    async def _do_discover(self, cloud: str, account_id: str, save_name: str) -> None:
-        self._status("[$accent]Opening browser to sign in to your account…[/]")
-        try:
-            session = await asyncio.to_thread(
-                self._onboarding.discover_account, cloud, account_id
-            )
-        except AuthError as exc:
-            self._status(f"[$error]Discovery failed:[/] {exc}")
-            return
-        if not session.workspaces:
-            self._status("[$accent]No workspaces found in this account.[/]")
-            return
-        self._account_session = session
-        self._pending_save = (account_id, save_name)
-        self.app.push_screen(DiscoveredPicker(session.workspaces), self._after_pick)
-
-    def _after_pick(self, ws: AccountWorkspace | None) -> None:
-        if ws:
-            self._do_connect_account_ws(ws)
-
-    @work(group="login")
-    async def _do_connect_account_ws(self, ws: AccountWorkspace) -> None:
-        if self._account_session is None:
-            return
-        self._status(f"[$accent]Connecting to {ws.name}…[/]")
-        account_id, save_name = getattr(self, "_pending_save", ("", ""))
-        try:
-            connection = await asyncio.to_thread(
-                self._onboarding.connect_account_workspace,
-                self._account_session,
-                ws,
-                account_id or None,
-            )
-        except AuthError as exc:
-            self._status(f"[$error]Connect failed:[/] {exc}")
             return
         self.dismiss(
             ConnectResult(

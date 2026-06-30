@@ -10,13 +10,14 @@ from __future__ import annotations
 import asyncio
 from functools import partial
 
-from textual import on, work
+from rich.markup import escape
+from textual import events, on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.command import DiscoveryHit, Hit, Hits, Provider
 from textual.containers import Horizontal
 from textual.screen import Screen
-from textual.widgets import DataTable, Footer, Input, ListView, Static
+from textual.widgets import DataTable, Footer, Input, Static
 
 from ...application import OnboardingService, WorkspaceService
 from ...domain import StoreError
@@ -58,7 +59,7 @@ class MainScreen(Screen[None]):
     COMMANDS = {IsolinearCommands}
 
     BINDINGS = [
-        Binding("w", "switch_workspace", "Workspace"),
+        Binding("w", "switch_workspace", "Workspace", show=False),
         Binding("n", "new_secret", "New"),
         Binding("N", "new_scope", "New scope", show=False),
         Binding("e", "edit_secret", "Edit"),
@@ -66,9 +67,10 @@ class MainScreen(Screen[None]):
         Binding("p", "permissions", "Perms"),
         Binding("space", "reveal", "Reveal"),
         Binding("c", "copy", "Copy"),
-        Binding("r", "refresh_scope", "Refresh"),
+        Binding("r", "refresh_scope", "Refresh", show=False),
         Binding("R", "refresh_workspace", "Refresh all", show=False),
-        Binding("a", "auth", "Auth"),
+        Binding("a", "auth", "Auth", show=False),
+        Binding("s", "sort", "Sort", show=False),
         Binding("slash", "filter", "Filter"),
         Binding("question_mark", "help", "Help"),
         Binding("escape", "cancel_filter", "Clear filter", show=False),
@@ -86,19 +88,22 @@ class MainScreen(Screen[None]):
     ) -> None:
         super().__init__()
         self._onboarding = onboarding
-        self.profiles = onboarding.saved_workspaces()
+        self.workspaces = onboarding.available_workspaces()
         self.session = session
         self.current_scope: str | None = None
         self.current_secret: str | None = None
         self._revealed: tuple[str, str] | None = None
         self._status_text: str = ""
-        self._status_dot: tuple[str, str] = ("●", "$success")
         self._filter_target: str | None = None  # "scopes" | "secrets" while filtering
 
     # ── layout ─────────────────────────────────────────────────────────
     def compose(self) -> ComposeResult:
         with Horizontal(id="banner"):
-            yield Static("▦ ISOLINEAR", id="brand")
+            yield Static(
+                "[$scopes-color]█[/][$secrets-color]█[/][$detail-color]█[/]"
+                "  [b]Isolinear[/]",
+                id="brand",
+            )
             yield Static("", id="breadcrumb")
             yield Static("", id="ws-status")
         with Horizontal(id="body"):
@@ -106,7 +111,7 @@ class MainScreen(Screen[None]):
             yield SecretsPane()
             yield DetailPane()
         yield Input(id="filter-bar", placeholder="filter…")
-        yield Footer()
+        yield Footer(show_command_palette=False)
 
     def on_mount(self) -> None:
         if self.session is not None:
@@ -133,56 +138,36 @@ class MainScreen(Screen[None]):
         assert self.session is not None, "no active session"
         return self.session
 
-    # status-bar identity + seal indicator
-    _SPINNER = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
-    _WARM_LINES = [
-        "initializing isolinear core",
-        "aligning the chips",
-        "indexing optical storage",
-        "running level-1 diagnostic",
-        "establishing subspace link",
-        "powering the matrix",
-    ]
-
-    def _set_status(self, text: str, *, dot: str = "●", color: str = "$success") -> None:
+    def _set_status(self, text: str, *, color: str = "$text-muted") -> None:
         self._status_text = text
-        self._status_dot = (dot, color)
-        self._render_status()
+        self.query_one("#ws-status", Static).update(f"[{color}]{text}[/]")
 
     def _render_status(self) -> None:
         widget = self.query_one("#ws-status", Static)
         if self.session is None:
-            widget.update("[$text-muted]not connected · press w to sign in[/]")
+            widget.update("[$text-muted]Not connected — press w to sign in[/]")
             return
-        dot, color = self._status_dot
         user = self._sess.identity.user_name or "—"
-        seal = (
-            "[b $accent]🔓 unsealed[/]" if self._revealed else "[$text-muted]🔒 sealed[/]"
-        )
-        widget.update(
-            f"[{color}]{dot}[/] [b]{user}[/]  ·  {self._sess.label}"
-            f"  ·  {self._status_text}  ·  {seal}"
-        )
+        widget.update(f"[$text-muted]{user}  ·  {self._sess.label}[/]")
 
     def _render_breadcrumb(self) -> None:
         bc = self.query_one("#breadcrumb", Static)
         parts: list[str] = []
         if self.current_scope:
-            parts.append(f"[b $primary]{self.current_scope}[/]")
+            parts.append(
+                f"[$text-muted]scope:[/] [$scopes-color b]{escape(self.current_scope)}[/]"
+            )
         if self.current_secret:
-            parts.append(f"[$accent]{self.current_secret}[/]")
-        bc.update("  [dim]▸[/]  ".join(parts))
+            parts.append(
+                "[$text-muted]secret:[/] "
+                f"[$secrets-color b]{escape(self.current_secret)}[/]"
+            )
+        bc.update("   [dim]/[/]   ".join(parts))
 
     # ── scope view models + filtering ───────────────────────────────────
     def _scope_rows(self) -> list[ScopeRow]:
-        access = {s.scope: s.effective for s in self._sess.auth_summary()}
         return [
-            ScopeRow(
-                name=sc.name,
-                icon=sc.icon,
-                count=len(self._sess.secrets_for(sc.name)),
-                access=access.get(sc.name, "—"),
-            )
+            ScopeRow(name=sc.name, count=len(self._sess.secrets_for(sc.name)))
             for sc in self._sess.scopes
         ]
 
@@ -213,7 +198,7 @@ class MainScreen(Screen[None]):
         if self._filter_target == "secrets":
             self.secrets_pane.focus_table()
         else:
-            self.scopes_pane.query_one(ListView).focus()
+            self.scopes_pane.focus_table()
         self._filter_target = None
 
     def _apply_filter(self, text: str) -> None:
@@ -237,7 +222,7 @@ class MainScreen(Screen[None]):
     def open_login(self) -> None:
         self.app.push_screen(
             LoginScreen(
-                self.profiles, self._onboarding, can_cancel=self.session is not None
+                self.workspaces, self._onboarding, can_cancel=self.session is not None
             ),
             self._on_login_result,
         )
@@ -245,7 +230,7 @@ class MainScreen(Screen[None]):
     def _on_login_result(self, result: ConnectResult | None) -> None:
         if result is None:
             if self.session is None:
-                self._set_status("not connected · press w to sign in")
+                self._render_status()
             return
         if result.save and result.connection.host:
             self._persist_profile(result)
@@ -256,12 +241,11 @@ class MainScreen(Screen[None]):
         conn = result.connection
         try:
             await asyncio.to_thread(
-                self._onboarding.save_profile,
-                result.save_name,
-                conn.host,
-                conn.account_id,
+                self._onboarding.save_profile, result.save_name, conn.host
             )
-            self.profiles = await asyncio.to_thread(self._onboarding.saved_workspaces)
+            self.workspaces = await asyncio.to_thread(
+                self._onboarding.available_workspaces
+            )
             self.notify(f"Saved profile “{result.save_name}”.")
         except Exception as exc:  # noqa: BLE001
             self.notify(f"Could not save profile: {exc}", severity="error")
@@ -281,38 +265,33 @@ class MainScreen(Screen[None]):
         self.secrets_pane.clear()
         self.detail_pane.clear()
         self._render_breadcrumb()
-        self._set_status("establishing subspace link…", dot="◐", color="$accent")
+        self._set_status("Connecting…")
 
         identity = await asyncio.to_thread(session.authenticate)
         if not identity.authenticated:
             self._set_status(
-                f"[$error]access denied[/] · {identity.error}", dot="○", color="$error"
+                f"Access denied — {escape(identity.error or '')}", color="$error"
             )
             return
-        self._set_status("scanning the array…", dot="◐", color="$accent")
+        self._set_status("Loading scopes…")
 
         try:
             scopes = await asyncio.to_thread(session.load_scopes)
         except StoreError as exc:
-            self._set_status(f"[$error]{exc}[/]", dot="○", color="$error")
+            self._set_status(escape(str(exc)), color="$error")
             return
         self.scopes_pane.show(self._scope_rows())
 
         total = len(scopes)
         for i, scope in enumerate(scopes, 1):
             await asyncio.to_thread(session.warm_scope, scope.name)
-            spin = self._SPINNER[i % len(self._SPINNER)]
-            line = self._WARM_LINES[i % len(self._WARM_LINES)]
-            filled = round(i / total * 10)
-            bar = f"[$primary]{'▰' * filled}[/][$panel]{'▱' * (10 - filled)}[/]"
-            self._set_status(f"{line}…  {bar} {i}/{total}", dot=spin, color="$accent")
+            self._set_status(f"Loading… {i}/{total}")
             if scope.name == self.current_scope:
                 self._show_scope(scope.name)
 
         # refresh rows now that counts + access are warmed
         self.scopes_pane.show(self._scope_rows(), keep=self.current_scope, focus=False)
-        plural = "scope" if total == 1 else "scopes"
-        self._set_status(f"{total} {plural} online", dot="●", color="$success")
+        self._render_status()
 
     # ── selection → render ──────────────────────────────────────────────
     def _show_scope(self, name: str) -> None:
@@ -344,24 +323,35 @@ class MainScreen(Screen[None]):
             if self._revealed == (scope, key)
             else None
         )
-        self.detail_pane.show_secret(self._sess.secret(scope, key), scope, key, value)
-        self._render_status()  # flip 🔒 sealed ↔ 🔓 unsealed
+        self.detail_pane.show_secret(
+            self._sess.secret(scope, key),
+            scope,
+            key,
+            value,
+            self._access_for(scope),
+            self._sess.acls_for(scope),
+        )
+        self._render_status()
 
     @on(ScopesPane.Selected)
     def _on_scope_selected(self, message: ScopesPane.Selected) -> None:
-        if self.session:
+        # A DataTable re-emits RowHighlighted on every rebuild (refresh/sort),
+        # so ignore re-selections of the current scope — otherwise a refresh
+        # would reset the chosen secret and collapse a revealed value.
+        if self.session and message.scope != self.current_scope:
             self._show_scope(message.scope)
 
     @on(SecretsPane.Selected)
     def _on_secret_selected(self, message: SecretsPane.Selected) -> None:
-        self._show_secret(message.key)
+        if message.key != self.current_secret:
+            self._show_secret(message.key)
 
-    @on(ListView.Selected, "#scopes-list")
+    @on(DataTable.RowSelected, "#scopes-table")
     def _scope_activated(self) -> None:
         self.secrets_pane.focus_table()
 
     # ── keyboard navigation ─────────────────────────────────────────────
-    _PANES = ("scopes-list", "secrets-table")
+    _PANES = ("scopes-table", "secrets-table")
 
     def action_vi(self, direction: str) -> None:
         fn = getattr(self.focused, f"action_cursor_{direction}", None)
@@ -375,13 +365,36 @@ class MainScreen(Screen[None]):
         target = self._PANES[(idx + step) % len(self._PANES)]
         self.query_one(f"#{target}").focus()
 
+    @on(events.DescendantFocus)
+    def _focus_changed(self) -> None:
+        # the footer is context-aware (check_action keys off the focused pane);
+        # refresh it on *any* focus change — Tab, arrows, Enter-drill, or mouse.
+        self.refresh_bindings()
+
     def action_jump(self, where: str) -> None:
         widget = self.focused
-        if isinstance(widget, ListView) and len(widget):
-            widget.index = 0 if where == "top" else len(widget) - 1
-        elif isinstance(widget, DataTable) and widget.row_count:
+        if isinstance(widget, DataTable) and widget.row_count:
             row = 0 if where == "top" else widget.row_count - 1
             widget.move_cursor(row=row)
+
+    def action_sort(self) -> None:
+        fid = getattr(self.focused, "id", None)
+        if fid == "secrets-table":
+            self.secrets_pane.cycle_sort()
+        elif fid == "scopes-table":
+            self.scopes_pane.cycle_sort()
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        """Context-aware footer — hide actions that don't fit the focused pane.
+        In Textual, returning False hides AND disables a binding, so only hide
+        actions that are genuinely invalid in that context (everything else stays
+        usable from both panes)."""
+        fid = getattr(self.focused, "id", None)
+        if action in ("reveal", "copy", "edit_secret"):
+            return fid == "secrets-table"  # need a selected secret
+        if action == "permissions":
+            return fid == "scopes-table"  # scope-level action
+        return True
 
     # ── command palette ─────────────────────────────────────────────────
     def command_catalog(self) -> list[tuple[str, object]]:
@@ -393,6 +406,7 @@ class MainScreen(Screen[None]):
             ("Manage scope permissions", self.action_permissions),
             ("Reveal secret value", self.action_reveal),
             ("Copy secret value", self.action_copy),
+            ("Sort", self.action_sort),
             ("Refresh scope", self.action_refresh_scope),
             ("Refresh workspace", self.action_refresh_workspace),
             ("Authorization overview", self.action_auth),
@@ -437,7 +451,7 @@ class MainScreen(Screen[None]):
             self.notify(f"Create scope failed: {exc}", severity="error")
             return
         self.scopes_pane.show(self._scope_rows(), keep=name)
-        self.notify(f"🔒 Scope “{name}” created.")
+        self.notify(f"Scope “{name}” created.")
 
     def action_new_secret(self) -> None:
         if not (self.session and self.current_scope):
@@ -469,21 +483,27 @@ class MainScreen(Screen[None]):
         if scope == self.current_scope:
             self._show_scope(scope)
         self.scopes_pane.show(self._scope_rows(), keep=self.current_scope, focus=False)
-        self.notify(f"🔑 Secret “{key}” saved.")
+        self.notify(f"Secret “{key}” saved.")
 
     def action_delete(self) -> None:
         focused_id = getattr(self.focused, "id", None)
         if focused_id == "secrets-table" and self.current_scope and self.current_secret:
             scope, key = self.current_scope, self.current_secret
             self.app.push_screen(
-                ConfirmModal("Delete secret", f"Delete secret “{key}”?"),
+                ConfirmModal(
+                    "Delete secret",
+                    f"Permanently delete [b]{key}[/] from [b]{scope}[/].\n"
+                    "[$text-muted]This can't be undone.[/]",
+                ),
                 partial(self._delete_secret_if, scope, key),
             )
-        elif focused_id == "scopes-list" and self.current_scope:
+        elif focused_id == "scopes-table" and self.current_scope:
             name = self.current_scope
             self.app.push_screen(
                 ConfirmModal(
-                    "Delete scope", f"Delete scope “{name}” and all its secrets?"
+                    "Delete scope",
+                    f"Permanently delete [b]{name}[/] and all its secrets.\n"
+                    "[$text-muted]This can't be undone.[/]",
                 ),
                 partial(self._delete_scope_if, name),
             )
@@ -557,7 +577,7 @@ class MainScreen(Screen[None]):
         cached = self._sess.cached_value(*target)
         if cached is not None:
             self.app.copy_to_clipboard(cached)
-            self.notify(f"📋 Copied “{target[1]}” to clipboard.")
+            self.notify(f"Copied “{target[1]}” to clipboard.")
         else:
             self._copy_fetch(target)
 
@@ -570,7 +590,7 @@ class MainScreen(Screen[None]):
             self.notify(f"Cannot read value: {exc}", severity="error")
             return
         self.app.copy_to_clipboard(value)
-        self.notify(f"📋 Copied “{target[1]}” to clipboard.")
+        self.notify(f"Copied “{target[1]}” to clipboard.")
 
     # ── refresh (US-15) ─────────────────────────────────────────────────
     def action_refresh_scope(self) -> None:
@@ -579,12 +599,12 @@ class MainScreen(Screen[None]):
 
     @work(group="refresh")
     async def _refresh_scope(self, name: str) -> None:
-        self._set_status(f"refreshing {name}…")
+        self._set_status(f"Refreshing {name}…")
         await asyncio.to_thread(self._sess.refresh_scope, name)
         if name == self.current_scope:
             self._show_scope(name)
         self.scopes_pane.show(self._scope_rows(), keep=self.current_scope, focus=False)
-        self._set_status(f"{self._sess.identity.user_name} · refreshed {name}")
+        self._render_status()
 
     def action_refresh_workspace(self) -> None:
         if self.session:

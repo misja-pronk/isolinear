@@ -1,0 +1,23 @@
+# Sample Databricks Asset Bundle.
+#
+# Run Isolinear from this directory and the `dev` target's workspace appears as
+# the *default* connection in the login (Source: databricks.yml), ahead of any
+# ~/.databrickscfg profiles:
+#
+#     cd examples && uv run --project .. isolinear      # or: uvx isolinear
+#
+# (The hosts below are placeholders — listing works offline; connecting opens
+# the browser for OAuth against whatever host you point it at.)
+
+bundle:
+  name: isolinear-demo
+
+targets:
+  dev:
+    default: true
+    workspace:
+      host: https://dbc-demo.cloud.databricks.com
+
+  prod:
+    workspace:
+      host: https://acme-prod.cloud.databricks.com

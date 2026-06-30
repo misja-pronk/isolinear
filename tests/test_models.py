@@ -2,8 +2,14 @@ from __future__ import annotations
 
 import pytest
 
-from isolinear.domain import Scope, Secret, Workspace, cloud_by_key, perm_rank
-from isolinear.domain.models import AccountWorkspace
+from isolinear.domain import (
+    SOURCE_BUNDLE,
+    SOURCE_PROFILE,
+    Scope,
+    Secret,
+    Workspace,
+    perm_rank,
+)
 
 
 def test_perm_rank_orders_permissions():
@@ -32,17 +38,20 @@ def test_workspace_label_strips_scheme():
     assert ws.label == "prod  ·  x.cloud.databricks.com"
 
 
-def test_account_workspace_label():
-    aw = AccountWorkspace(workspace_id=42, name="analytics", status="RUNNING")
-    assert "analytics" in aw.label and "42" in aw.label and "RUNNING" in aw.label
+def test_profile_workspace_name_and_source():
+    ws = Workspace(profile="prod", host="https://prod.cloud.databricks.com")
+    assert ws.source == SOURCE_PROFILE
+    assert ws.name == "prod"
+    assert ws.source_label == "~/.databrickscfg"
 
 
-def test_cloud_by_key_hosts():
-    assert cloud_by_key("azure").account_host == "https://accounts.azuredatabricks.net"
-    assert cloud_by_key("aws").account_host == "https://accounts.cloud.databricks.com"
-    assert cloud_by_key("gcp").account_host == "https://accounts.gcp.databricks.com"
-
-
-def test_cloud_by_key_unknown_raises():
-    with pytest.raises(StopIteration):
-        cloud_by_key("oracle")
+def test_bundle_workspace_name_source_and_default_marker():
+    ws = Workspace(
+        host="https://dab.cloud.databricks.com",
+        source=SOURCE_BUNDLE,
+        target="acme",
+        default=True,
+    )
+    assert ws.name == "acme"  # no profile -> falls back to the bundle target
+    assert ws.host_label == "dab.cloud.databricks.com"
+    assert ws.source_label == "databricks.yml  ·  default"

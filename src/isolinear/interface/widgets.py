@@ -6,33 +6,18 @@ message (`ScopesPane.Selected`, `SecretsPane.Selected`) so the screen stays thin
 
 from __future__ import annotations
 
-import random
-import string
 import time
 from dataclasses import dataclass
 
+from rich.markup import escape
 from rich.text import Text
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Vertical, VerticalScroll
 from textual.message import Message
-from textual.widgets import DataTable, Label, ListItem, ListView, Static
+from textual.widgets import DataTable, Static
 
 from ..domain import Acl, Scope, Secret
-
-PERM_COLOR = {"READ": "$secondary", "WRITE": "$success", "MANAGE": "$accent"}
-# A compact glyph for the current user's access on a scope.
-ACCESS_GLYPH = {
-    "MANAGE": "[$accent]★[/]",
-    "WRITE": "[$success]✎[/]",
-    "READ": "[$secondary]•[/]",
-}
-
-# A small isolinear-chip stack — greets you before anything is selected.
-CHIPS = """\
-[$secondary]      ▟▓▓▓▓▓▓▓▓▓▙[/]
-[$primary]      ▟▓▓▓▓▓▓▓▓▓▙[/]
-[$accent]      ▟▓▓▓▓▓▓▓▓▓▙[/]"""
 
 
 def fuzzy_match(query: str, text: str) -> bool:
@@ -58,18 +43,31 @@ def relative_age(ms: int | None) -> tuple[str, bool]:
     return "now", True
 
 
+# Permission levels, coloured by privilege so elevated access is scannable.
+PERM_COLOR = {
+    "READ": "$text-muted",
+    "WRITE": "$secrets-color",
+    "MANAGE": "$detail-color",
+}
+
+
+def perm_markup(permission: str) -> str:
+    """Content markup for a permission level, coloured by privilege."""
+    color = PERM_COLOR.get(permission, "$foreground")
+    weight = " b" if permission == "MANAGE" else ""
+    return f"[{color}{weight}]{permission}[/]"
+
+
 @dataclass
 class ScopeRow:
     """View model for one scope row."""
 
     name: str
-    icon: str
     count: int
-    access: str  # MANAGE | WRITE | READ | "—"
 
 
 class ScopesPane(Vertical):
-    """Left pane: the scope list (filterable, with counts + access)."""
+    """Left pane: the scopes table (filterable, with secret counts)."""
 
     class Selected(Message):
         def __init__(self, scope: str) -> None:
@@ -81,10 +79,13 @@ class ScopesPane(Vertical):
         self._rows: list[ScopeRow] = []
         self._visible: list[ScopeRow] = []
         self._filter = ""
+        self._sort_col = 0  # 0=Scope, 1=Secrets
+        self._sort_rev = False
 
     def compose(self) -> ComposeResult:
-        yield Static("🔒  SCOPES", classes="pane-title", id="scopes-title")
-        yield ListView(id="scopes-list")
+        table: DataTable = DataTable(id="scopes-table", zebra_stripes=False)
+        table.cursor_type = "row"
+        yield table
         yield Static("", id="scopes-empty", classes="empty-hint")
 
     def show(
@@ -99,14 +100,21 @@ class ScopesPane(Vertical):
         self._rebuild(focus=False)
 
     def _rebuild(self, *, focus: bool, keep: str | None = None) -> None:
-        lv = self.query_one(ListView)
-        lv.clear()
-        self._visible = [r for r in self._rows if fuzzy_match(self._filter, r.name)]
+        table = self.query_one(DataTable)
+        table.clear(columns=True)
+        arrow = "↓" if self._sort_rev else "↑"
+        table.add_columns(
+            *(
+                f"{name} {arrow}" if i == self._sort_col else name
+                for i, name in enumerate(("Scope", "Secrets"))
+            )
+        )
+        self._visible = self._sorted(
+            [r for r in self._rows if fuzzy_match(self._filter, r.name)]
+        )
         for r in self._visible:
-            glyph = ACCESS_GLYPH.get(r.access, "")
-            lv.append(ListItem(Label(f"{r.icon}  {r.name}  [dim]{r.count}[/] {glyph}")))
-        self.query_one("#scopes-title", Static).update(f"🔒  SCOPES ({len(self._rows)})")
-        lv.display = bool(self._visible)
+            table.add_row(r.name, Text(str(r.count), style="grey62"), key=r.name)
+        table.display = bool(self._visible)
         hint = self.query_one("#scopes-empty", Static)
         hint.display = not self._visible
         if not self._rows:
@@ -117,15 +125,47 @@ class ScopesPane(Vertical):
             hint.update(f"[$text-muted]No scope matches\n“{self._filter}”.[/]")
         if self._visible:
             idx = next((i for i, r in enumerate(self._visible) if r.name == keep), 0)
-            lv.index = idx
+            table.move_cursor(row=idx)
             if focus:
-                lv.focus()
+                table.focus()
 
-    @on(ListView.Highlighted, "#scopes-list")
-    def _highlighted(self, event: ListView.Highlighted) -> None:
-        idx = event.list_view.index
-        if idx is not None and 0 <= idx < len(self._visible):
-            self.post_message(self.Selected(self._visible[idx].name))
+    def focus_table(self) -> None:
+        self.query_one(DataTable).focus()
+
+    @on(DataTable.RowHighlighted, "#scopes-table")
+    def _highlighted(self, event: DataTable.RowHighlighted) -> None:
+        if event.row_key is not None and event.row_key.value:
+            self.post_message(self.Selected(event.row_key.value))
+
+    # ── sorting: click a column header, or cycle with the `s` key ──────
+    @on(DataTable.HeaderSelected, "#scopes-table")
+    def _header_clicked(self, event: DataTable.HeaderSelected) -> None:
+        self._set_sort(event.column_index)
+
+    def cycle_sort(self) -> None:
+        """Keyboard sort: flip direction, then advance to the next column."""
+        if not self._sort_rev:
+            self._sort_rev = True
+        else:
+            self._sort_rev = False
+            self._sort_col = (self._sort_col + 1) % 2
+        self._rebuild(focus=False, keep=self._cursor_scope())
+
+    def _set_sort(self, col: int) -> None:
+        if col == self._sort_col:
+            self._sort_rev = not self._sort_rev
+        else:
+            self._sort_col, self._sort_rev = col, False
+        self._rebuild(focus=False, keep=self._cursor_scope())
+
+    def _cursor_scope(self) -> str | None:
+        row = self.query_one(DataTable).cursor_row
+        return self._visible[row].name if 0 <= row < len(self._visible) else None
+
+    def _sorted(self, rows: list[ScopeRow]) -> list[ScopeRow]:
+        if self._sort_col == 0:  # Scope — alphabetical
+            return sorted(rows, key=lambda r: r.name.lower(), reverse=self._sort_rev)
+        return sorted(rows, key=lambda r: r.count, reverse=self._sort_rev)  # Secrets
 
 
 class SecretsPane(Vertical):
@@ -140,17 +180,16 @@ class SecretsPane(Vertical):
         super().__init__(id="secrets-pane", classes="pane")
         self._scope = ""
         self._secrets: list[Secret] = []
+        self._visible: list[Secret] = []
         self._filter = ""
+        self._sort_col = 0  # column index: 0=Key, 1=Updated, 2=Age
+        self._sort_rev = False
 
     def compose(self) -> ComposeResult:
-        yield Static("🔑  SECRETS", classes="pane-title", id="secrets-title")
-        table: DataTable = DataTable(id="secrets-table", zebra_stripes=True)
+        table: DataTable = DataTable(id="secrets-table", zebra_stripes=False)
         table.cursor_type = "row"
         yield table
         yield Static("", id="secrets-empty", classes="empty-hint")
-
-    def on_mount(self) -> None:
-        self.query_one(DataTable).add_columns("Key", "Updated", "Age")
 
     def show(self, scope: str, secrets: list[Secret]) -> None:
         self._scope = scope
@@ -162,41 +201,46 @@ class SecretsPane(Vertical):
         self._filter = text
         self._rebuild()
 
-    def _rebuild(self) -> None:
+    def _rebuild(self, *, keep: str | None = None) -> None:
         table = self.query_one(DataTable)
-        table.clear()
-        visible = [s for s in self._secrets if fuzzy_match(self._filter, s.key)]
-        for s in visible:
-            age, fresh = relative_age(s.last_updated_ms)
+        table.clear(columns=True)
+        arrow = "↓" if self._sort_rev else "↑"
+        table.add_columns(
+            *(
+                f"{name} {arrow}" if i == self._sort_col else name
+                for i, name in enumerate(("Key", "Updated", "Age"))
+            )
+        )
+        self._visible = self._sorted(
+            [s for s in self._secrets if fuzzy_match(self._filter, s.key)]
+        )
+        for s in self._visible:
+            age, _ = relative_age(s.last_updated_ms)
             table.add_row(
                 s.key,
-                Text(s.last_updated, style="grey70"),
-                Text(age, style="#29e0c4" if fresh else "grey50"),
+                Text(s.last_updated, style="grey62"),
+                Text(age, style="grey50"),
                 key=s.key,
             )
-        title = (
-            f"🔑  SECRETS · {self._scope} ({len(visible)})"
-            if self._scope
-            else "🔑  SECRETS"
-        )
-        self.query_one("#secrets-title", Static).update(title)
-        table.display = bool(visible)
+        table.display = bool(self._visible)
         hint = self.query_one("#secrets-empty", Static)
-        hint.display = not visible and bool(self._scope)
-        if not visible and self._scope:
+        hint.display = not self._visible and bool(self._scope)
+        if not self._visible and self._scope:
             if self._filter:
                 hint.update(f"[$text-muted]No secret matches\n“{self._filter}”.[/]")
             else:
                 hint.update(
-                    f"[$text-muted]📭  “{self._scope}” is empty.\n"
+                    f"[$text-muted]“{self._scope}” is empty.\n"
                     "Press [b $primary]n[/] to add a secret.[/]"
                 )
+        if self._visible and keep is not None:
+            idx = next((i for i, s in enumerate(self._visible) if s.key == keep), 0)
+            table.move_cursor(row=idx)
 
     def clear(self) -> None:
         self._scope = ""
         self._secrets = []
         self.query_one(DataTable).clear()
-        self.query_one("#secrets-title", Static).update("🔑  SECRETS")
         self.query_one("#secrets-empty").display = False
 
     def focus_table(self) -> None:
@@ -207,8 +251,38 @@ class SecretsPane(Vertical):
         if event.row_key is not None and event.row_key.value:
             self.post_message(self.Selected(event.row_key.value))
 
+    # ── sorting: click a column header, or cycle with the `s` key ──────
+    @on(DataTable.HeaderSelected, "#secrets-table")
+    def _header_clicked(self, event: DataTable.HeaderSelected) -> None:
+        self._set_sort(event.column_index)
 
-_UNLOCK_POOL = string.ascii_letters + string.digits + "!@#$%^&*/.:_-+="
+    def cycle_sort(self) -> None:
+        """Keyboard sort: flip direction, then advance to the next column."""
+        if not self._sort_rev:
+            self._sort_rev = True
+        else:
+            self._sort_rev = False
+            self._sort_col = (self._sort_col + 1) % 3
+        self._rebuild(keep=self._cursor_key())
+
+    def _set_sort(self, col: int) -> None:
+        if col == self._sort_col:
+            self._sort_rev = not self._sort_rev
+        else:
+            self._sort_col, self._sort_rev = col, False
+        self._rebuild(keep=self._cursor_key())
+
+    def _cursor_key(self) -> str | None:
+        row = self.query_one(DataTable).cursor_row
+        return self._visible[row].key if 0 <= row < len(self._visible) else None
+
+    def _sorted(self, secrets: list[Secret]) -> list[Secret]:
+        if self._sort_col == 0:  # Key — alphabetical
+            return sorted(secrets, key=lambda s: s.key.lower(), reverse=self._sort_rev)
+        # Updated / Age — by timestamp
+        return sorted(
+            secrets, key=lambda s: s.last_updated_ms or 0, reverse=self._sort_rev
+        )
 
 
 class DetailPane(Vertical):
@@ -216,59 +290,32 @@ class DetailPane(Vertical):
 
     def __init__(self) -> None:
         super().__init__(id="detail-pane", classes="pane")
-        self._unlock_timer = None
 
     def compose(self) -> ComposeResult:
-        yield Static("ℹ  DETAIL", classes="pane-title")
-        with VerticalScroll():
+        # not focusable: keeps Tab/focus on the two tables so the context-aware
+        # footer always has a real pane to reason about (mouse wheel still scrolls)
+        with VerticalScroll(can_focus=False):
             yield Static("", id="detail-body")
             yield Static("", id="detail-value", classes="secret-value")
 
     def _body(self, markup: str) -> None:
         self.query_one("#detail-body", Static).update(markup)
 
-    def _stop_unlock(self) -> None:
-        if self._unlock_timer is not None:
-            self._unlock_timer.stop()
-            self._unlock_timer = None
-
     def _hide_value(self) -> None:
-        self._stop_unlock()
         self.query_one("#detail-value").display = False
 
     def show_value(self, value: str) -> None:
-        """Reveal the value with a left-to-right 'decrypt' animation."""
+        """Reveal the value instantly in the live (green) card."""
         card = self.query_one("#detail-value", Static)
         card.display = True
-        self._stop_unlock()
-        steps = max(4, min(len(value), 12))
-        state = {"n": 0}
-
-        def frame() -> None:
-            state["n"] += 1
-            shown = int(len(value) * state["n"] / steps)
-            if state["n"] >= steps:
-                card.update(f"[$accent b]🔓 {value}[/]")
-                self._stop_unlock()
-                return
-            out = "".join(
-                ch if (ch in " \n\t" or i < shown) else random.choice(_UNLOCK_POOL)
-                for i, ch in enumerate(value)
-            )
-            card.update(f"[$accent b]🔓 {out}[/]")
-
-        card.update(
-            f"[$accent b]🔓 {''.join(random.choice(_UNLOCK_POOL) for _ in value)}[/]"
-        )
-        self._unlock_timer = self.set_interval(0.03, frame)
+        card.update(escape(value))  # values are arbitrary — never parse as markup
 
     def clear(self) -> None:
-        """The 'nothing selected' state — chips idle, standing by."""
+        """The 'nothing selected' state."""
         self._hide_value()
         self._body(
-            CHIPS
-            + "\n\n[$text-muted]   Standing by.[/]"
-            + "\n[$text-muted]   Select a scope to inspect.[/]"
+            "\n[$text-muted]Nothing selected.[/]"
+            "\n[$text-muted]Pick a scope on the left.[/]"
         )
 
     def show_scope(
@@ -276,46 +323,64 @@ class DetailPane(Vertical):
     ) -> None:
         self._hide_value()
         backend = "Azure Key Vault" if scope.is_keyvault else "Databricks-backed"
-        access_markup = (
-            f"[{PERM_COLOR.get(access, '$foreground')} b]{access}[/]"
-            if access != "—"
-            else "[$text-muted]none[/]"
-        )
+        access_text = perm_markup(access) if access != "—" else "[$text-muted]none[/]"
         lines = [
-            f"[$primary b]{scope.icon}  {scope.name}[/]",
+            f"[b]{escape(scope.name)}[/]",
             "",
-            f"[$text-muted]backend[/]      [b]{backend}[/]",
-            f"[$text-muted]secrets[/]      [b]{secret_count}[/]",
-            f"[$text-muted]your access[/]  {access_markup}",
+            f"[$text-muted]Backend[/]      {backend}",
+            f"[$text-muted]Secrets[/]      {secret_count}",
+            f"[$text-muted]Your access[/]  {access_text}",
             "",
-            f"[$primary]👥 Permissions[/] [dim]({len(acls)})[/]",
+            f"[$text-muted]Permissions[/]  [dim]{len(acls)}[/]",
         ]
         if acls:
-            for acl in acls:
-                color = PERM_COLOR.get(acl.permission, "$foreground")
-                lines.append(f"  [b]{acl.principal}[/] [{color}]{acl.permission}[/]")
+            lines += [
+                f"  {escape(a.principal)}  {perm_markup(a.permission)}" for a in acls
+            ]
         else:
-            lines.append("  [$text-muted](none / not yet loaded)[/]")
-        lines += ["", "[dim]p to manage permissions[/]"]
+            lines.append("  [$text-muted](none)[/]")
+        lines += ["", "[$text-muted]p to manage permissions[/]"]
         self._body("\n".join(lines))
 
     def show_secret(
-        self, secret: Secret | None, scope: str, key: str, value: str | None
+        self,
+        secret: Secret | None,
+        scope: str,
+        key: str,
+        value: str | None,
+        access: str = "—",
+        acls: list[Acl] | None = None,
     ) -> None:
+        acls = acls or []
         updated = secret.last_updated if secret else "—"
-        age = relative_age(secret.last_updated_ms)[0] if secret else "—"
+        access_text = perm_markup(access) if access != "—" else "[$text-muted]none[/]"
         lines = [
-            f"[$primary b]🔑  {key}[/]",
+            f"[b]{escape(key)}[/]",
             "",
-            f"[$text-muted]scope[/]     [b]{scope}[/]",
-            f"[$text-muted]updated[/]   [b]{updated}[/] [dim]({age} ago)[/]",
+            f"[$text-muted]Scope[/]        {escape(scope)}",
+            f"[$text-muted]Updated[/]      {updated}",
+            f"[$text-muted]Your access[/]  {access_text}",
             "",
+            f"[$text-muted]Permissions[/]  [dim]{len(acls)}[/]",
         ]
+        if acls:
+            lines += [
+                f"  {escape(a.principal)}  {perm_markup(a.permission)}" for a in acls
+            ]
+        else:
+            lines.append("  [$text-muted](none)[/]")
+        lines.append("")
         if value is not None:
-            lines.append("[$text-muted]value[/]   [dim]space to hide · c to copy[/]")
+            lines += [
+                "[$text-muted]Value[/]        [$detail-color]revealed[/]",
+                "[dim]space to hide · c to copy[/]",
+            ]
             self._body("\n".join(lines))
             self.show_value(value)
         else:
-            lines.append("[$text-muted]value[/]   [dim]•••••••• · space to reveal[/]")
+            lines += [
+                "[$text-muted]Value[/]        [dim]••••••••[/]",
+                "[dim]space to reveal[/]",
+            ]
             self._hide_value()
             self._body("\n".join(lines))

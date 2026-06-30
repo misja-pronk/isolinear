@@ -4,26 +4,40 @@ from __future__ import annotations
 
 import asyncio
 
+from rich.text import Text
 from textual import on, work
-from textual.app import ComposeResult
+from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Input, Select, Static
 
 from ..application import WorkspaceService
-from ..domain import AuthSummary, Identity, StoreError
+from ..domain import AuthSummary, Identity, StoreError, perm_rank
+from .widgets import PERM_COLOR
 
 PERMISSIONS = ["READ", "WRITE", "MANAGE"]
+
+
+def perm_cell(app: App, permission: str) -> Text:
+    """A DataTable cell for a permission level, coloured by privilege."""
+    var = PERM_COLOR.get(permission, "$foreground").lstrip("$")
+    color = app.theme_variables.get(var, "")
+    style = f"bold {color}" if permission == "MANAGE" else color
+    return Text(permission, style=style)
+
+
+def key_label(label: str) -> str:
+    """A button label with its first letter underlined as the access key."""
+    return f"[u]{label[0]}[/u]{label[1:]}" if label else label
 
 
 class ConfirmModal(ModalScreen[bool]):
     """Yes/No guard for destructive actions."""
 
     BINDINGS = [
-        Binding("escape", "cancel", "Cancel"),
-        Binding("y", "confirm", "Yes"),
-        Binding("n", "cancel", "No"),
+        Binding("escape,c,n", "cancel", "Cancel"),
+        Binding("y,d,o", "confirm", "Confirm"),
     ]
 
     def __init__(self, title: str, message: str, danger: bool = True) -> None:
@@ -33,13 +47,14 @@ class ConfirmModal(ModalScreen[bool]):
         self._danger = danger
 
     def compose(self) -> ComposeResult:
+        ok_label = "Delete" if self._danger else "OK"
         with Vertical(id="dialog", classes="danger" if self._danger else ""):
             yield Static(self._title, classes="dialog-title")
             yield Static(self._message)
             with Horizontal(classes="buttons"):
-                yield Button("Cancel", id="cancel", variant="default")
+                yield Button(key_label("Cancel"), id="cancel", variant="default")
                 yield Button(
-                    "Delete" if self._danger else "OK",
+                    key_label(ok_label),
                     id="ok",
                     variant="error" if self._danger else "primary",
                 )
@@ -70,7 +85,9 @@ class SecretFormModal(ModalScreen[tuple[str, str] | None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
             verb = "Edit secret" if self._edit else "New secret"
-            yield Static(f"{verb}  ·  scope “{self._scope}”", classes="dialog-title")
+            yield Static(
+                f"{verb}   [$scopes-color]{self._scope}[/]", classes="dialog-title"
+            )
             key_input = Input(value=self._key, placeholder="key", id="f-key")
             key_input.disabled = self._edit
             yield key_input
@@ -138,6 +155,7 @@ class HelpScreen(ModalScreen[None]):
         ("g / G", "Jump to top / bottom"),
         ("enter", "Drill scope → secrets"),
         ("/", "Filter the focused pane"),
+        ("s", "Sort the focused table (or click a column)"),
         ("", ""),
         ("n / N", "New secret / new scope"),
         ("e", "Edit secret value"),
@@ -155,10 +173,11 @@ class HelpScreen(ModalScreen[None]):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
-            yield Static("ISOLINEAR — keys", classes="dialog-title")
+            yield Static("Isolinear — keys", classes="dialog-title")
             with VerticalScroll():
                 for key, desc in self.KEYS:
-                    yield Static(f"[b $primary]{key:<12}[/]  {desc}")
+                    yield Static(f"[b $secondary]{key:<12}[/]  {desc}")
+            yield Static("[$text-muted]esc close[/]", classes="dialog-hint")
 
     def action_close(self) -> None:
         self.dismiss(None)
@@ -179,23 +198,22 @@ class AuthScreen(ModalScreen[None]):
             yield Static("Authorization overview", classes="dialog-title")
             who = self._identity.user_name or "(unknown)"
             status = (
-                "✓ authenticated"
+                "[$success]✓ authenticated[/]"
                 if self._identity.authenticated
-                else "✗ not authenticated"
+                else "[$error]✗ not authenticated[/]"
             )
-            yield Static(f"[$text-muted]Identity[/]  [b]{who}[/]   [$primary]{status}[/]")
-            table: DataTable = DataTable(id="auth-table", zebra_stripes=True)
+            yield Static(f"[$text-muted]Identity[/]  [b]{who}[/]   {status}")
+            table: DataTable = DataTable(id="auth-table", zebra_stripes=False)
             table.cursor_type = "row"
-            table.add_columns("Scope", "My access", "ACLs", "Write", "Manage")
-            for s in self._summaries:
-                table.add_row(
-                    s.scope,
-                    s.effective,
-                    str(s.acl_count),
-                    "✓" if s.can_write else "·",
-                    "✓" if s.can_manage else "·",
-                )
+            table.add_columns("Scope", "Your access", "Principals")
+            ranked = sorted(
+                self._summaries,
+                key=lambda s: (-perm_rank(s.effective), s.scope.lower()),
+            )
+            for s in ranked:
+                table.add_row(s.scope, perm_cell(self.app, s.effective), str(s.acl_count))
             yield table
+            yield Static("[$text-muted]esc close[/]", classes="dialog-hint")
 
     def on_mount(self) -> None:
         self.query_one(DataTable).focus()
@@ -278,13 +296,18 @@ class PermissionsScreen(ModalScreen[None]):
         self._principals: list[str] = []
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="dialog"):
-            yield Static(f"Permissions · scope “{self._scope}”", classes="dialog-title")
-            yield Static("[$text-muted]a add · e change · d remove · esc close[/]")
-            table: DataTable = DataTable(id="acl-table", zebra_stripes=True)
+        with Vertical(id="dialog", classes="scope"):
+            yield Static(
+                f"Permissions   [$scopes-color]{self._scope}[/]", classes="dialog-title"
+            )
+            table: DataTable = DataTable(id="acl-table", zebra_stripes=False)
             table.cursor_type = "row"
-            table.add_columns("Principal", "Permission")
+            table.add_columns("Principal", "Access")
             yield table
+            yield Static(
+                "[$text-muted]a add · e change · d remove · esc close[/]",
+                classes="dialog-hint",
+            )
 
     def on_mount(self) -> None:
         self._populate()
@@ -295,7 +318,9 @@ class PermissionsScreen(ModalScreen[None]):
         table.clear()
         self._principals = []
         for acl in self._session.acls_for(self._scope):
-            table.add_row(acl.principal, acl.permission, key=acl.principal)
+            table.add_row(
+                acl.principal, perm_cell(self.app, acl.permission), key=acl.principal
+            )
             self._principals.append(acl.principal)
 
     def _selected(self) -> str | None:

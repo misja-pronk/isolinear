@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import cast
 
-from textual.widgets import DataTable, ListView
+from textual.widgets import DataTable
 
 from fakes import seeded_store, stub_onboarding
 from isolinear.app import IsolinearApp
@@ -23,7 +23,7 @@ async def test_warm_populates_scopes_and_selects_first():
         await app.workers.wait_for_complete()
         await pilot.pause()
         main = cast(MainScreen, app.screen)
-        assert len(main.query_one(ScopesPane).query_one(ListView)) == 2
+        assert main.query_one(ScopesPane).query_one(DataTable).row_count == 2
         # scopes are sorted -> 'kv' before 'prod'
         assert main.current_scope == "kv"
 
@@ -95,6 +95,48 @@ async def test_filter_narrows_then_clears_secrets():
         assert table.row_count == 2
 
 
+async def test_sorting_scopes_preserves_revealed_secret():
+    app, _ = _app_with_session()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        main = cast(MainScreen, app.screen)
+        await pilot.press("j")  # scopes: kv -> prod
+        await pilot.press("tab")  # focus secrets
+        await pilot.press("j")  # secrets: api-key -> db-password
+        await pilot.pause()
+        chosen = main.current_secret
+        await pilot.press("space")  # reveal it
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert main._revealed is not None
+        await pilot.press("h")  # focus the scopes pane again
+        await pilot.press("s")  # sort scopes — must not reset the secret/reveal
+        await pilot.pause()
+        assert main.current_secret == chosen
+        assert main._revealed is not None
+
+
+async def test_sorting_secrets_preserves_revealed_secret():
+    app, _ = _app_with_session()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        main = cast(MainScreen, app.screen)
+        await pilot.press("j")  # scopes: kv -> prod
+        await pilot.press("tab")  # focus secrets
+        await pilot.press("j")  # secrets: api-key -> db-password
+        await pilot.pause()
+        chosen = main.current_secret
+        await pilot.press("space")  # reveal it
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        await pilot.press("s")  # sort secrets — cursor + reveal must hold
+        await pilot.pause()
+        assert main.current_secret == chosen
+        assert main._revealed is not None
+
+
 async def test_delete_secret_via_confirm_keeps_siblings():
     app, session = _app_with_session()
     async with app.run_test() as pilot:
@@ -123,4 +165,4 @@ async def test_new_scope_via_modal_updates_pane():
         await app.workers.wait_for_complete()
         await pilot.pause()
         assert any(s.name == "stage" for s in session.scopes)
-        assert len(app.screen.query_one(ScopesPane).query_one(ListView)) == 3
+        assert app.screen.query_one(ScopesPane).query_one(DataTable).row_count == 3

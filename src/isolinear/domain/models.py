@@ -9,53 +9,45 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+# Where a connection target was discovered. Shown to the user so it's always
+# clear where a workspace came from.
+SOURCE_PROFILE = "profile"  # ~/.databrickscfg
+SOURCE_BUNDLE = "bundle"  # ./databricks.yml (Databricks Asset Bundle)
+SOURCE_URL = "url"  # typed in by hand
+
+_SOURCE_LABELS = {
+    SOURCE_PROFILE: "~/.databrickscfg",
+    SOURCE_BUNDLE: "databricks.yml",
+    SOURCE_URL: "manual",
+}
+
 
 @dataclass(frozen=True)
 class Workspace:
-    """A connection target — one profile from ~/.databrickscfg."""
+    """A connection target the login can offer, plus where it came from."""
 
-    profile: str
-    host: str
+    profile: str = ""  # ~/.databrickscfg profile name (empty for bundle/url)
+    host: str = ""
+    source: str = SOURCE_PROFILE
+    target: str = ""  # bundle target / display name when there's no profile
+    default: bool = False  # pre-select this entry in the picker
+
+    @property
+    def host_label(self) -> str:
+        return self.host.replace("https://", "").replace("http://", "").rstrip("/")
+
+    @property
+    def name(self) -> str:
+        return self.profile or self.target or self.host_label or "(workspace)"
+
+    @property
+    def source_label(self) -> str:
+        base = _SOURCE_LABELS.get(self.source, self.source)
+        return f"{base}  ·  default" if self.default else base
 
     @property
     def label(self) -> str:
-        host = self.host.replace("https://", "").replace("http://", "").rstrip("/")
-        return f"{self.profile}  ·  {host}" if host else self.profile
-
-
-@dataclass(frozen=True)
-class Cloud:
-    key: str  # aws | azure | gcp
-    label: str
-    account_host: str
-
-
-CLOUDS: list[Cloud] = [
-    Cloud("aws", "AWS", "https://accounts.cloud.databricks.com"),
-    Cloud("azure", "Azure", "https://accounts.azuredatabricks.net"),
-    Cloud("gcp", "GCP", "https://accounts.gcp.databricks.com"),
-]
-
-
-def cloud_by_key(key: str) -> Cloud:
-    return next(c for c in CLOUDS if c.key == key)
-
-
-@dataclass
-class AccountWorkspace:
-    """A workspace discovered via the account-level API (US-1, discovery)."""
-
-    workspace_id: int
-    name: str
-    deployment_name: str = ""
-    status: str = ""
-    cloud: str = ""
-    raw: object = None  # original SDK provisioning.Workspace, for get_workspace_client
-
-    @property
-    def label(self) -> str:
-        status = f"  ·  {self.status}" if self.status else ""
-        return f"{self.name}  ·  id {self.workspace_id}{status}"
+        return f"{self.name}  ·  {self.host_label}" if self.host_label else self.name
 
 
 @dataclass

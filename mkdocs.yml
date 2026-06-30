@@ -1,0 +1,97 @@
+site_name: Isolinear
+site_description: A keyboard-driven terminal UI for managing Databricks secrets.
+site_author: Misja Pronk
+site_url: https://misja-pronk.github.io/isolinear/
+
+repo_name: misja-pronk/isolinear
+repo_url: https://github.com/misja-pronk/isolinear
+edit_uri: edit/main/docs/
+
+copyright: MIT © Misja Pronk
+
+theme:
+  name: material
+  font: false # use the system font stack (SF on macOS) for a native, calm feel
+  icon:
+    repo: fontawesome/brands/github
+    logo: material/grid
+  palette:
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Switch to light
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - navigation.footer
+    - navigation.indexes
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - toc.follow
+    - search.suggest
+    - search.highlight
+
+extra_css:
+  - stylesheets/extra.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - footnotes
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.details
+  - pymdownx.keys
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+plugins:
+  - search
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/misja-pronk/isolinear
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/isolinear/
+
+# docs/ also holds repo-only files and screenshot tooling — keep them out of the site
+exclude_docs: |
+  USER_STORIES.md
+  redesign/
+  *.svg
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Guide:
+      - Connecting: connecting.md
+      - Browsing & managing: browsing.md
+      - Keyboard: keyboard.md
+      - Themes: themes.md
+  - Security: security.md
+  - Develop:
+      - Architecture: architecture.md
+      - Contributing: contributing.md

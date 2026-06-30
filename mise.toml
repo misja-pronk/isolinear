@@ -5,3 +5,7 @@ uv = "latest"
 [env]
 # Use uv-managed virtualenv at .venv
 UV_PROJECT_ENVIRONMENT = ".venv"
+# Silence mkdocs-material's upstream "MkDocs 2.0" advisory banner. We pin
+# mkdocs < 2 (via mkdocs-material >= 9.7.5), so the breakage it warns about
+# can't reach us. https://squidfunk.github.io/mkdocs-material/blog/2026/02/18/mkdocs-2.0/
+NO_MKDOCS_2_WARNING = "1"

@@ -138,10 +138,17 @@ class StubConnector:
     def connect_url(self, host):
         raise NotImplementedError
 
-    def discover_account(self, cloud_key, account_id):
-        raise NotImplementedError
+
+class StubBundle:
+    """A `BundleStore` that returns a preset bundle workspace (or none)."""
+
+    def __init__(self, workspace=None) -> None:
+        self._workspace = workspace
+
+    def discover(self):
+        return self._workspace
 
 
-def stub_onboarding(profiles=None) -> OnboardingService:
-    """An OnboardingService wired to stubs — saved profiles, no live connect."""
-    return OnboardingService(StubConnector(), StubProfiles(profiles))
+def stub_onboarding(profiles=None, bundle=None) -> OnboardingService:
+    """An OnboardingService wired to stubs — listed workspaces, no live connect."""
+    return OnboardingService(StubConnector(), StubProfiles(profiles), StubBundle(bundle))
