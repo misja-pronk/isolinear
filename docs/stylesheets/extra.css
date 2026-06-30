@@ -1,0 +1,66 @@
+/* Isolinear docs — echo the TUI's graphite base + violet / cyan / amber accents. */
+
+:root {
+  --iso-violet: #8b7cff;
+  --iso-cyan: #4ec9e0;
+  --iso-amber: #e0b24a;
+}
+
+/* brand primary (header) + accent (hover) for both light and dark palettes */
+[data-md-color-primary="custom"] {
+  --md-primary-fg-color: var(--iso-violet);
+  --md-primary-fg-color--light: #a99dff;
+  --md-primary-fg-color--dark: #6f5fe6;
+  --md-primary-bg-color: #ffffff;
+  --md-primary-bg-color--light: rgba(255, 255, 255, 0.7);
+}
+[data-md-color-accent="custom"] {
+  --md-accent-fg-color: var(--iso-cyan);
+}
+
+/* dark scheme → graphite, like the app itself */
+[data-md-color-scheme="slate"] {
+  --md-default-bg-color: #0e0f16;
+  --md-code-bg-color: #15161f;
+  --md-typeset-a-color: var(--iso-cyan);
+}
+[data-md-color-scheme="slate"] .md-header,
+[data-md-color-scheme="slate"] .md-tabs {
+  background-color: #15161f;
+  color: rgba(236, 237, 243, 0.92);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+[data-md-color-scheme="slate"] .md-header__title {
+  color: var(--iso-violet);
+  font-weight: 700;
+}
+
+/* screenshots: rounded, softly framed like the app's cards */
+.md-typeset img[src*="img/"] {
+  border-radius: 10px;
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.35);
+}
+
+.md-typeset .admonition,
+.md-typeset details {
+  border-radius: 8px;
+}
+
+/* a tri-colour rule that nods to the scopes / secrets / detail accents */
+.iso-rule {
+  height: 3px;
+  border: 0;
+  border-radius: 3px;
+  background: linear-gradient(
+    90deg,
+    var(--iso-violet) 0 33%,
+    var(--iso-cyan) 33% 66%,
+    var(--iso-amber) 66% 100%
+  );
+  margin: 1.2rem 0 1.6rem;
+}
+
+/* keyboard keys (pymdownx.keys) a touch softer */
+.md-typeset .keys kbd {
+  border-radius: 5px;
+}

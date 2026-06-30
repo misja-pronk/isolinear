@@ -1,16 +1,20 @@
 # Isolinear ▦
 
 **A keyboard-driven terminal UI for managing Databricks secrets.**
-Browse workspaces, scopes, secrets and ACLs; create / edit / delete; reveal &
-copy values — all from a fast, LCARS-flavoured TUI.
+Browse scopes, secrets and ACLs; create / edit / delete; reveal & copy
+values — all from a fast, calm three-pane TUI.
 
 [![ci](https://github.com/misja-pronk/isolinear/actions/workflows/ci.yml/badge.svg)](https://github.com/misja-pronk/isolinear/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/isolinear.svg)](https://pypi.org/project/isolinear/)
 [![Python](https://img.shields.io/pypi/pyversions/isolinear.svg)](https://pypi.org/project/isolinear/)
+[![Docs](https://img.shields.io/badge/docs-isolinear-8b7cff.svg)](https://misja-pronk.github.io/isolinear/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
 ![Isolinear browsing secrets](docs/img/browse.png)
+
+**[Read the docs →](https://misja-pronk.github.io/isolinear/)** — installation,
+connecting, the full keyboard reference, themes, and the security model.
 
 ## Install
 
@@ -128,6 +132,8 @@ uv run pytest        # tests (core units + UI via Textual Pilot)
 uv run ruff check .  # lint
 uv run ty check      # types
 uv run isolinear     # run it
+
+uv run --group docs mkdocs serve   # preview the docs site at localhost:8000
 ```
 
 ## License

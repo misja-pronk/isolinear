@@ -10,3 +10,6 @@ docs/redesign/*.svg.png
 
 # generated reference renders (regenerate with docs/redesign/capture.py)
 docs/redesign/*.svg
+
+# mkdocs build output
+site/

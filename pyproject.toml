@@ -65,6 +65,9 @@ dev = [
     "ty>=0.0.1a1",
     "types-pyyaml>=6.0.12.20260518",
 ]
+docs = [
+    "mkdocs-material>=9.5",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
