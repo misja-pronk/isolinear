@@ -9,6 +9,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
+from rich.markup import escape
 from rich.text import Text
 from textual import on
 from textual.app import ComposeResult
@@ -62,9 +63,7 @@ class ScopeRow:
     """View model for one scope row."""
 
     name: str
-    icon: str
     count: int
-    access: str  # MANAGE | WRITE | READ | "—"
 
 
 class ScopesPane(Vertical):
@@ -181,6 +180,7 @@ class SecretsPane(Vertical):
         super().__init__(id="secrets-pane", classes="pane")
         self._scope = ""
         self._secrets: list[Secret] = []
+        self._visible: list[Secret] = []
         self._filter = ""
         self._sort_col = 0  # column index: 0=Key, 1=Updated, 2=Age
         self._sort_rev = False
@@ -201,7 +201,7 @@ class SecretsPane(Vertical):
         self._filter = text
         self._rebuild()
 
-    def _rebuild(self) -> None:
+    def _rebuild(self, *, keep: str | None = None) -> None:
         table = self.query_one(DataTable)
         table.clear(columns=True)
         arrow = "↓" if self._sort_rev else "↑"
@@ -211,10 +211,10 @@ class SecretsPane(Vertical):
                 for i, name in enumerate(("Key", "Updated", "Age"))
             )
         )
-        visible = self._sorted(
+        self._visible = self._sorted(
             [s for s in self._secrets if fuzzy_match(self._filter, s.key)]
         )
-        for s in visible:
+        for s in self._visible:
             age, _ = relative_age(s.last_updated_ms)
             table.add_row(
                 s.key,
@@ -222,10 +222,10 @@ class SecretsPane(Vertical):
                 Text(age, style="grey50"),
                 key=s.key,
             )
-        table.display = bool(visible)
+        table.display = bool(self._visible)
         hint = self.query_one("#secrets-empty", Static)
-        hint.display = not visible and bool(self._scope)
-        if not visible and self._scope:
+        hint.display = not self._visible and bool(self._scope)
+        if not self._visible and self._scope:
             if self._filter:
                 hint.update(f"[$text-muted]No secret matches\n“{self._filter}”.[/]")
             else:
@@ -233,6 +233,9 @@ class SecretsPane(Vertical):
                     f"[$text-muted]“{self._scope}” is empty.\n"
                     "Press [b $primary]n[/] to add a secret.[/]"
                 )
+        if self._visible and keep is not None:
+            idx = next((i for i, s in enumerate(self._visible) if s.key == keep), 0)
+            table.move_cursor(row=idx)
 
     def clear(self) -> None:
         self._scope = ""
@@ -260,14 +263,18 @@ class SecretsPane(Vertical):
         else:
             self._sort_rev = False
             self._sort_col = (self._sort_col + 1) % 3
-        self._rebuild()
+        self._rebuild(keep=self._cursor_key())
 
     def _set_sort(self, col: int) -> None:
         if col == self._sort_col:
             self._sort_rev = not self._sort_rev
         else:
             self._sort_col, self._sort_rev = col, False
-        self._rebuild()
+        self._rebuild(keep=self._cursor_key())
+
+    def _cursor_key(self) -> str | None:
+        row = self.query_one(DataTable).cursor_row
+        return self._visible[row].key if 0 <= row < len(self._visible) else None
 
     def _sorted(self, secrets: list[Secret]) -> list[Secret]:
         if self._sort_col == 0:  # Key — alphabetical
@@ -285,7 +292,9 @@ class DetailPane(Vertical):
         super().__init__(id="detail-pane", classes="pane")
 
     def compose(self) -> ComposeResult:
-        with VerticalScroll():
+        # not focusable: keeps Tab/focus on the two tables so the context-aware
+        # footer always has a real pane to reason about (mouse wheel still scrolls)
+        with VerticalScroll(can_focus=False):
             yield Static("", id="detail-body")
             yield Static("", id="detail-value", classes="secret-value")
 
@@ -299,7 +308,7 @@ class DetailPane(Vertical):
         """Reveal the value instantly in the live (green) card."""
         card = self.query_one("#detail-value", Static)
         card.display = True
-        card.update(value)
+        card.update(escape(value))  # values are arbitrary — never parse as markup
 
     def clear(self) -> None:
         """The 'nothing selected' state."""
@@ -316,7 +325,7 @@ class DetailPane(Vertical):
         backend = "Azure Key Vault" if scope.is_keyvault else "Databricks-backed"
         access_text = perm_markup(access) if access != "—" else "[$text-muted]none[/]"
         lines = [
-            f"[b]{scope.name}[/]",
+            f"[b]{escape(scope.name)}[/]",
             "",
             f"[$text-muted]Backend[/]      {backend}",
             f"[$text-muted]Secrets[/]      {secret_count}",
@@ -325,7 +334,9 @@ class DetailPane(Vertical):
             f"[$text-muted]Permissions[/]  [dim]{len(acls)}[/]",
         ]
         if acls:
-            lines += [f"  {a.principal}  {perm_markup(a.permission)}" for a in acls]
+            lines += [
+                f"  {escape(a.principal)}  {perm_markup(a.permission)}" for a in acls
+            ]
         else:
             lines.append("  [$text-muted](none)[/]")
         lines += ["", "[$text-muted]p to manage permissions[/]"]
@@ -344,16 +355,18 @@ class DetailPane(Vertical):
         updated = secret.last_updated if secret else "—"
         access_text = perm_markup(access) if access != "—" else "[$text-muted]none[/]"
         lines = [
-            f"[b]{key}[/]",
+            f"[b]{escape(key)}[/]",
             "",
-            f"[$text-muted]Scope[/]        {scope}",
+            f"[$text-muted]Scope[/]        {escape(scope)}",
             f"[$text-muted]Updated[/]      {updated}",
             f"[$text-muted]Your access[/]  {access_text}",
             "",
             f"[$text-muted]Permissions[/]  [dim]{len(acls)}[/]",
         ]
         if acls:
-            lines += [f"  {a.principal}  {perm_markup(a.permission)}" for a in acls]
+            lines += [
+                f"  {escape(a.principal)}  {perm_markup(a.permission)}" for a in acls
+            ]
         else:
             lines.append("  [$text-muted](none)[/]")
         lines.append("")

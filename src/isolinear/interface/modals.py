@@ -211,9 +211,7 @@ class AuthScreen(ModalScreen[None]):
                 key=lambda s: (-perm_rank(s.effective), s.scope.lower()),
             )
             for s in ranked:
-                table.add_row(
-                    s.scope, perm_cell(self.app, s.effective), str(s.acl_count)
-                )
+                table.add_row(s.scope, perm_cell(self.app, s.effective), str(s.acl_count))
             yield table
             yield Static("[$text-muted]esc close[/]", classes="dialog-hint")
 

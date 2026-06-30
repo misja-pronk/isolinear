@@ -41,8 +41,9 @@ class DatabricksBundleStore:
 
         bundle_name = _dig(data, "bundle", "name") or ""
         target_name, host = _pick_target(data)
-        host = host or _dig(data, "workspace", "host") or ""
-        if not host or "${" in host:  # missing or an unresolved variable
+        if not host or "${" in host:  # target host missing/unresolved — try top-level
+            host = _dig(data, "workspace", "host") or ""
+        if not host or "${" in host:  # still missing or an unresolved variable
             return None
         try:
             host = normalize_host(host)

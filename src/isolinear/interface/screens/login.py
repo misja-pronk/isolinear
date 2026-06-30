@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 
+from rich.markup import escape
 from textual import on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -25,7 +26,7 @@ from textual.screen import ModalScreen, Screen
 from textual.widgets import Button, DataTable, Input, Static
 
 from ...application import Connection, OnboardingService
-from ...domain import AuthError, Workspace
+from ...domain import SOURCE_PROFILE, AuthError, Workspace
 
 
 @dataclass
@@ -153,12 +154,14 @@ class LoginScreen(Screen[ConnectResult | None]):
 
     @work(group="login")
     async def _connect(self, ws: Workspace) -> None:
-        opening = "" if ws.source == "profile" and ws.profile else " (opening browser)"
-        self._status(f"[$accent]Connecting to {ws.name}…{opening}[/]")
+        opening = (
+            "" if ws.source == SOURCE_PROFILE and ws.profile else " (opening browser)"
+        )
+        self._status(f"[$accent]Connecting to {escape(ws.name)}…{opening}[/]")
         try:
             connection = await asyncio.to_thread(self._onboarding.connect, ws)
         except AuthError as exc:
-            self._status(f"[$error]Connection failed:[/] {exc}")
+            self._status(f"[$error]Connection failed:[/] {escape(str(exc))}")
             return
         self.dismiss(ConnectResult(connection=connection))
 

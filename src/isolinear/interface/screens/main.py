@@ -10,7 +10,8 @@ from __future__ import annotations
 import asyncio
 from functools import partial
 
-from textual import on, work
+from rich.markup import escape
+from textual import events, on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.command import DiscoveryHit, Hit, Hits, Provider
@@ -154,24 +155,19 @@ class MainScreen(Screen[None]):
         parts: list[str] = []
         if self.current_scope:
             parts.append(
-                f"[$text-muted]scope:[/] [$scopes-color b]{self.current_scope}[/]"
+                f"[$text-muted]scope:[/] [$scopes-color b]{escape(self.current_scope)}[/]"
             )
         if self.current_secret:
             parts.append(
-                f"[$text-muted]secret:[/] [$secrets-color b]{self.current_secret}[/]"
+                "[$text-muted]secret:[/] "
+                f"[$secrets-color b]{escape(self.current_secret)}[/]"
             )
         bc.update("   [dim]/[/]   ".join(parts))
 
     # ── scope view models + filtering ───────────────────────────────────
     def _scope_rows(self) -> list[ScopeRow]:
-        access = {s.scope: s.effective for s in self._sess.auth_summary()}
         return [
-            ScopeRow(
-                name=sc.name,
-                icon=sc.icon,
-                count=len(self._sess.secrets_for(sc.name)),
-                access=access.get(sc.name, "—"),
-            )
+            ScopeRow(name=sc.name, count=len(self._sess.secrets_for(sc.name)))
             for sc in self._sess.scopes
         ]
 
@@ -274,7 +270,7 @@ class MainScreen(Screen[None]):
         identity = await asyncio.to_thread(session.authenticate)
         if not identity.authenticated:
             self._set_status(
-                f"[$error]Access denied[/] — {identity.error}", color="$error"
+                f"Access denied — {escape(identity.error or '')}", color="$error"
             )
             return
         self._set_status("Loading scopes…")
@@ -282,7 +278,7 @@ class MainScreen(Screen[None]):
         try:
             scopes = await asyncio.to_thread(session.load_scopes)
         except StoreError as exc:
-            self._set_status(f"[$error]{exc}[/]", color="$error")
+            self._set_status(escape(str(exc)), color="$error")
             return
         self.scopes_pane.show(self._scope_rows())
 
@@ -339,12 +335,16 @@ class MainScreen(Screen[None]):
 
     @on(ScopesPane.Selected)
     def _on_scope_selected(self, message: ScopesPane.Selected) -> None:
-        if self.session:
+        # A DataTable re-emits RowHighlighted on every rebuild (refresh/sort),
+        # so ignore re-selections of the current scope — otherwise a refresh
+        # would reset the chosen secret and collapse a revealed value.
+        if self.session and message.scope != self.current_scope:
             self._show_scope(message.scope)
 
     @on(SecretsPane.Selected)
     def _on_secret_selected(self, message: SecretsPane.Selected) -> None:
-        self._show_secret(message.key)
+        if message.key != self.current_secret:
+            self._show_secret(message.key)
 
     @on(DataTable.RowSelected, "#scopes-table")
     def _scope_activated(self) -> None:
@@ -364,7 +364,12 @@ class MainScreen(Screen[None]):
         step = 1 if direction == "right" else -1
         target = self._PANES[(idx + step) % len(self._PANES)]
         self.query_one(f"#{target}").focus()
-        self.refresh_bindings()  # footer is context-aware (check_action)
+
+    @on(events.DescendantFocus)
+    def _focus_changed(self) -> None:
+        # the footer is context-aware (check_action keys off the focused pane);
+        # refresh it on *any* focus change — Tab, arrows, Enter-drill, or mouse.
+        self.refresh_bindings()
 
     def action_jump(self, where: str) -> None:
         widget = self.focused

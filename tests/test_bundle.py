@@ -82,6 +82,29 @@ def test_unresolved_variable_is_skipped(tmp_path):
     assert store.discover() is None
 
 
+def test_templated_target_host_falls_back_to_top_level(tmp_path):
+    # the default target's host is an unresolved variable, but a usable
+    # top-level host exists — discover() should fall back to it, not give up.
+    store = _write(
+        tmp_path,
+        """
+        bundle:
+          name: acme
+        workspace:
+          host: https://top.cloud.databricks.com
+        targets:
+          prod:
+            default: true
+            workspace:
+              host: ${var.host}
+        """,
+    )
+    ws = store.discover()
+    assert ws is not None
+    assert ws.host == "https://top.cloud.databricks.com"
+    assert ws.target == "prod"
+
+
 def test_no_host_returns_none(tmp_path):
     assert _write(tmp_path, "bundle:\n  name: empty\n").discover() is None
 
