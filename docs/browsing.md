@@ -2,7 +2,7 @@
 
 The browser is built from three panes. The header shows a breadcrumb — `scope: X / secret: Y` — so you always know where you are.
 
-![The three-pane browser with a secret revealed](img/browse.png)
+![The three-pane browser with a secret revealed](img/browse.svg)
 
 | Pane | Shows |
 |------|-------|
@@ -44,13 +44,13 @@ Reveal a value with ++space++ or copy it with ++c++. Revealing shows the value i
 
 Destructive actions show a confirmation dialog before anything is removed.
 
-![Delete confirmation dialog](img/confirm.png)
+![Delete confirmation dialog](img/confirm.svg)
 
 ## Managing permissions (ACLs)
 
 Press ++p++ to manage a scope's permissions. From the modal you can grant, change, or remove **READ**, **WRITE**, or **MANAGE** for a principal — a user, group, or service principal.
 
-![Scope permissions modal](img/perms.png)
+![Scope permissions modal](img/perms.svg)
 
 !!! note "Privilege levels are colour-coded"
     Permission levels are coloured by privilege: **READ** muted, **WRITE** cyan, **MANAGE** amber and bold — so the strongest grants stand out at a glance.
@@ -59,7 +59,7 @@ Press ++p++ to manage a scope's permissions. From the modal you can grant, chang
 
 Press ++a++ for a modal listing every scope with your **effective** permission and the number of principals, sorted by privilege. It's a fast "what can I touch" view across the whole workspace.
 
-![Authorization overview modal](img/auth.png)
+![Authorization overview modal](img/auth.svg)
 
 ## Refreshing
 

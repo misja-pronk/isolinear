@@ -2,7 +2,7 @@
 
 On launch, Isolinear opens a **workspace picker**. It gathers connection targets from three sources and labels every row with its **Source**, so you always know where a target came from.
 
-![Workspace picker with a bundle default and two profiles](img/login.png)
+![Workspace picker with a bundle default and two profiles](img/login.svg)
 
 Pick a row and press ++enter++. Saved profiles connect instantly; a bundle target or a URL opens your browser to authenticate.
 
@@ -58,4 +58,4 @@ Optionally tick **save as profile** to persist the target in `~/.databrickscfg` 
 
 If there is no bundle in the current directory and no saved profiles, the picker still opens — empty — so you can add a workspace by URL.
 
-![Workspace picker with nothing discovered](img/login-empty.png)
+![Workspace picker with nothing discovered](img/login-empty.svg)

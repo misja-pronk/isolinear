@@ -11,7 +11,7 @@ values — all from a fast, calm three-pane TUI.
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-![Isolinear browsing secrets](docs/img/browse.png)
+![Isolinear browsing secrets](docs/img/browse.svg)
 
 **[Read the docs →](https://misja-pronk.github.io/isolinear/)** — installation,
 connecting, the full keyboard reference, themes, and the security model.
@@ -53,8 +53,8 @@ login` (host + `auth_type = external-browser`, **no secret ever stored**).
 
 <table>
   <tr>
-    <td><img src="docs/img/login.png" alt="Workspace picker"></td>
-    <td><img src="docs/img/auth.png" alt="Authorization overview"></td>
+    <td><img src="docs/img/login.svg" alt="Workspace picker"></td>
+    <td><img src="docs/img/auth.svg" alt="Authorization overview"></td>
   </tr>
   <tr>
     <td align="center"><sub>Workspace picker — bundle + profiles + URL</sub></td>

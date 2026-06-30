@@ -35,10 +35,11 @@
   font-weight: 700;
 }
 
-/* screenshots: rounded, softly framed like the app's cards */
+/* screenshots are transparent SVGs — the terminal window already carries its own
+   chrome, so no frame/shadow (a box-shadow would just outline the transparent
+   margins). Cap the width so the hero doesn't render oversized. */
 .md-typeset img[src*="img/"] {
-  border-radius: 10px;
-  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.35);
+  max-width: 100%;
 }
 
 .md-typeset .admonition,
