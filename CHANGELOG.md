@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-06-30
+
+### Fixed
+
+- The three browser panes now share the row's width responsively: the detail
+  pane grows with the terminal (and scopes flexes within bounds) instead of the
+  secrets pane absorbing all the slack while detail stayed pinned narrow.
+
 ## [0.2.0] - 2026-06-30
 
 A full UI redesign and an onboarding rework.
@@ -73,6 +81,7 @@ Initial release.
 - Pre-loads and caches scopes/secrets/ACLs on startup.
 - Three switchable themes (violet, amber Okudagram, phosphor green).
 
-[Unreleased]: https://github.com/misja-pronk/isolinear/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/misja-pronk/isolinear/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/misja-pronk/isolinear/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/misja-pronk/isolinear/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/misja-pronk/isolinear/releases/tag/v0.1.0
