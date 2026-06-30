@@ -22,6 +22,9 @@ from isolinear.application import WorkspaceService  # noqa: E402
 from isolinear.domain import SOURCE_BUNDLE, Workspace  # noqa: E402
 
 SIZE = (112, 34)
+# Dark page behind the terminal window so the export has no white margin (which
+# looks bad in dark-mode docs). Matches the docs' graphite background.
+PAGE_BG = "#0e0f16"
 
 
 async def shot(
@@ -50,6 +53,12 @@ async def shot(
             .replace(
                 "font-family: arial",
                 "font-family: ui-sans-serif, -apple-system, Helvetica Neue, sans-serif",
+            )
+            .replace(
+                'xmlns="http://www.w3.org/2000/svg">',
+                'xmlns="http://www.w3.org/2000/svg">\n'
+                f'<rect width="100%" height="100%" fill="{PAGE_BG}"/>',
+                1,
             )
         )
         Path(path).write_text(svg)
