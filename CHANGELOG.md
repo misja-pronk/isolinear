@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Panel widths: the scopes and secrets panes each size to their own content
+  (as wide as they need, no wider), and the detail pane fills the remaining
+  space — so the inspector gets the room instead of the secrets list hogging it.
+
 ## [0.2.2] - 2026-06-30
 
 ### Fixed
