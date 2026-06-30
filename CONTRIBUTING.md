@@ -60,3 +60,32 @@ Keep business logic out of the UI, keep the SDK out of everything but
 - Describe the *why*, not just the *what*.
 - By contributing you agree your work is licensed under the project's
   [MIT License](LICENSE).
+
+## Releasing
+
+Releases are **version-driven**: the `version` in `pyproject.toml` is the single
+source of truth, and merging a bump to `main` ships it. No manual tagging.
+
+1. On a branch, bump the version:
+
+   ```sh
+   uv version --bump patch   # or: minor / major — edits pyproject.toml + uv.lock
+   ```
+
+2. In `CHANGELOG.md`, rename the `## [Unreleased]` heading to `## [X.Y.Z]` (the
+   new version) and start a fresh, empty `## [Unreleased]` above it. Those notes
+   become the GitHub release body.
+3. Open a PR. When it merges to `main`, the [`release`](.github/workflows/release.yml)
+   workflow:
+   - builds the wheel + sdist and publishes them to **PyPI** (via Trusted
+     Publishing — no API token), and
+   - creates the **`vX.Y.Z`** git tag and a **GitHub release** with the changelog
+     notes.
+
+A merge that doesn't change the version is a no-op, and a version that's already
+tagged or already on PyPI is skipped — so the workflow is safe to re-run.
+
+> **One-time setup.** Releasing uses [PyPI Trusted Publishing](https://docs.pypi.org/trusted-publishers/)
+> instead of a token. Add a publisher at
+> <https://pypi.org/manage/account/publishing/> for repository
+> `misja-pronk/isolinear`, workflow `release.yml`, and environment `pypi`.

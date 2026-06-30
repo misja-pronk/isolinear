@@ -1,43 +1,95 @@
 name: release
 
-# Publish to PyPI when a version tag is pushed, e.g. `git tag v0.1.0 && git push --tags`.
-# Uses PyPI Trusted Publishing (OIDC) — no API token needed. Configure a trusted
-# publisher for this repo + workflow at https://pypi.org/manage/account/publishing/.
+# Version-driven releases — the package version is the single source of truth.
+# To cut a release:
+#   1. uv version --bump {patch|minor|major}   # edits pyproject.toml + uv.lock
+#   2. move the CHANGELOG "[Unreleased]" notes under a "## [x.y.z]" heading
+#   3. open a PR and merge to main
+# On that merge this workflow checks whether the version is already released; if
+# not, it builds the wheel + sdist, publishes to PyPI, and creates the matching
+# `vX.Y.Z` git tag + GitHub release (notes pulled from the CHANGELOG). A push that
+# doesn't change the version is a no-op.
+#
+# One-time setup — configure a PyPI Trusted Publisher (no API token needed) for
+#   repo: misja-pronk/isolinear · workflow: release.yml · environment: pypi
+# at https://pypi.org/manage/account/publishing/
 
 on:
   push:
-    tags: ["v*"]
+    branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
-  pypi:
-    name: build + publish to PyPI
+  check:
+    name: detect version bump
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.decide.outputs.should_release }}
+      version: ${{ steps.read.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need the tags to tell whether this version shipped
+      - id: read
+        name: Read the project version
+        run: |
+          v=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "Project version: $v"
+      - id: decide
+        name: Already released?
+        run: |
+          version="${{ steps.read.outputs.version }}"
+          released=false
+          if git rev-parse "v$version" >/dev/null 2>&1; then
+            echo "git tag v$version already exists"; released=true
+          fi
+          code=$(curl -fsS -o /dev/null -w "%{http_code}" \
+            "https://pypi.org/pypi/isolinear/$version/json" || echo 000)
+          if [ "$code" = "200" ]; then
+            echo "isolinear $version is already on PyPI"; released=true
+          fi
+          if [ "$released" = "true" ]; then
+            echo "Nothing to release for $version."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Will release $version."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  release:
+    name: publish v${{ needs.check.outputs.version }}
+    needs: check
+    if: needs.check.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
-      id-token: write # required for trusted publishing
+      contents: write # create the tag + GitHub release
+      id-token: write # PyPI Trusted Publishing (OIDC)
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
-
       - name: Build
         run: uv build
-
-      - name: Publish
-        run: uv publish --trusted-publishing always
-
-  github-release:
-    name: attach artifacts to the GitHub release
-    needs: pypi
-    if: startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - run: uv build
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*
-          generate_release_notes: true
+      - name: Publish to PyPI
+        run: uv publish --trusted-publishing always --check-url https://pypi.org/simple/
+      - name: Release notes from CHANGELOG
+        run: |
+          version="${{ needs.check.outputs.version }}"
+          awk -v v="$version" '
+            index($0, "## [" v "]") == 1 { f=1; next }
+            f && index($0, "## [") == 1 { exit }
+            f { print }
+          ' CHANGELOG.md > notes.md || true
+      - name: Create the tag + GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${{ needs.check.outputs.version }}"
+          args=(--title "v$version" --target "$GITHUB_SHA")
+          if [ -s notes.md ]; then args+=(--notes-file notes.md); else args+=(--generate-notes); fi
+          gh release create "v$version" dist/* "${args[@]}"
