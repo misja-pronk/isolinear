@@ -118,9 +118,14 @@ Button.-error:focus {
 #secrets-pane:focus-within { border: round $secrets-color; }
 #detail-pane:focus-within { border: round $detail-color; }
 
-#scopes-pane { width: 26; }
-#secrets-pane { width: 1fr; min-width: 40; }
-#detail-pane { width: 42; }
+/* Width scaling: the three panes share the row. Scopes is a slim list — it
+   flexes but is capped so it never hogs space; secrets (the main list) and
+   detail (the inspector) each take a 2fr share of the remaining width, so the
+   detail pane grows on wider terminals instead of being pinned narrow. The
+   min-widths keep every pane readable before the layout has to scroll. */
+#scopes-pane { width: 1fr; min-width: 24; max-width: 34; }
+#secrets-pane { width: 2fr; min-width: 38; }
+#detail-pane { width: 2fr; min-width: 44; max-width: 60; }
 
 /* the scopes table cursor in the scopes section colour */
 #scopes-table > .datatable--cursor {
