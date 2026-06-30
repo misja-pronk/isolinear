@@ -28,6 +28,8 @@ jobs:
   build:
     name: build site
     runs-on: ubuntu-latest
+    env:
+      NO_MKDOCS_2_WARNING: "1" # we pin mkdocs < 2; suppress the advisory banner
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6

@@ -633,7 +633,7 @@ dev = [
     { name = "ty", specifier = ">=0.0.1a1" },
     { name = "types-pyyaml", specifier = ">=6.0.12.20260518" },
 ]
-docs = [{ name = "mkdocs-material", specifier = ">=9.5" }]
+docs = [{ name = "mkdocs-material", specifier = ">=9.7.5" }]
 
 [[package]]
 name = "jinja2"
