@@ -9,3 +9,52 @@ UV_PROJECT_ENVIRONMENT = ".venv"
 # mkdocs < 2 (via mkdocs-material >= 9.7.5), so the breakage it warns about
 # can't reach us. https://squidfunk.github.io/mkdocs-material/blog/2026/02/18/mkdocs-2.0/
 NO_MKDOCS_2_WARNING = "1"
+
+# ── tasks ──────────────────────────────────────────────────────────────────
+# Run with `mise run <name>` (or `mise <name>`); list them with `mise tasks`.
+# Everything goes through uv, so the project .venv stays the source of truth.
+
+[tasks.dev]
+description = "Run the Isolinear TUI"
+alias = "run"
+run = "uv run isolinear"
+
+[tasks.test]
+description = "Run the test suite (pytest)"
+alias = "t"
+run = "uv run pytest"
+
+[tasks.lint]
+description = "Lint with ruff"
+run = "uv run ruff check ."
+
+[tasks.fmt]
+description = "Auto-format with ruff"
+alias = "format"
+run = "uv run ruff format ."
+
+[tasks.typecheck]
+description = "Type-check with ty"
+alias = "types"
+run = "uv run ty check"
+
+[tasks.check]
+description = "Full pre-commit gate: lint + format check + types + tests"
+run = [
+    "uv run ruff check .",
+    "uv run ruff format --check .",
+    "uv run ty check",
+    "uv run pytest",
+]
+
+[tasks.build]
+description = "Build the wheel + sdist into dist/"
+run = "uv build"
+
+[tasks.docs]
+description = "Preview the docs site at localhost:8000"
+run = "uv run --group docs mkdocs serve"
+
+[tasks."docs:build"]
+description = "Build the docs site (strict)"
+run = "uv run --group docs mkdocs build --strict"
