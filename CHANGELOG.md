@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-06-30
+
+### Fixed
+
+- The scopes pane now sizes to the longest scope name (within bounds), so long
+  scope names are no longer clipped while the detail pane keeps a usable width.
+- Docs screenshots refreshed; the screenshot export now has a dark background
+  (no white margin) so it reads well in dark-mode docs.
+
 ## [0.2.1] - 2026-06-30
 
 ### Fixed
@@ -81,7 +90,8 @@ Initial release.
 - Pre-loads and caches scopes/secrets/ACLs on startup.
 - Three switchable themes (violet, amber Okudagram, phosphor green).
 
-[Unreleased]: https://github.com/misja-pronk/isolinear/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/misja-pronk/isolinear/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/misja-pronk/isolinear/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/misja-pronk/isolinear/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/misja-pronk/isolinear/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/misja-pronk/isolinear/releases/tag/v0.1.0
