@@ -46,6 +46,13 @@ A full UI redesign and an onboarding rework.
   wrong `--highlight` class instead of Textual's `-highlight`).
 - The revealed-value card's right border was clipped by the detail-pane scroll
   gutter.
+- Secret values, scope/secret/principal names, and error messages containing
+  square brackets no longer crash rendering (they were parsed as Rich markup).
+- Refreshing or sorting the scopes table no longer resets the selected secret or
+  hides a revealed value; sorting the secrets table keeps the cursor in place.
+- A `databricks.yml` whose default target has a templated host still falls back
+  to the top-level `workspace.host`.
+- The footer no longer goes stale after drilling into a scope with Enter.
 
 ## [0.1.0]
 
