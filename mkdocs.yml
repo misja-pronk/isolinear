@@ -77,11 +77,12 @@ extra:
     - icon: fontawesome/brands/python
       link: https://pypi.org/project/isolinear/
 
-# docs/ also holds repo-only files and screenshot tooling — keep them out of the site
+# docs/ also holds repo-only files and screenshot tooling — keep them out of the
+# site (the redesign/ folder holds capture.py + its scratch SVGs; the published
+# screenshots live in docs/img/*.svg and must NOT be excluded)
 exclude_docs: |
   USER_STORIES.md
   redesign/
-  *.svg
 
 nav:
   - Home: index.md

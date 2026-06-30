@@ -2,7 +2,7 @@
 
 A fast, keyboard-driven terminal UI for managing Databricks secrets — browse scopes, secrets, and permissions across three panes without ever leaving your terminal.
 
-![Isolinear browsing secrets](img/browse.png)
+![Isolinear browsing secrets](img/browse.svg)
 
 Isolinear puts the full lifecycle of Databricks secret **scopes**, **secrets**, and **ACLs** behind a calm, three-pane browser. Drill from scopes into their secrets, reveal and copy values on demand, and review your effective access — all driven by the keyboard.
 

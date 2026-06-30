@@ -118,15 +118,16 @@ Button.-error:focus {
 #secrets-pane:focus-within { border: round $secrets-color; }
 #detail-pane:focus-within { border: round $detail-color; }
 
-/* Width scaling: the scopes pane sizes to its content — it's as wide as the
-   longest scope name needs (so long names don't get clipped), bounded so it
-   never collapses or hogs. Secrets (the main list) and detail (the inspector)
-   then each take a 2fr share of the remaining width, so detail grows on wider
-   terminals instead of being pinned narrow. min-widths keep panes readable. */
-#scopes-pane { width: auto; min-width: 22; max-width: 40; }
+/* Width scaling: the two list panes (scopes, secrets) each size to their own
+   content — exactly as wide as the longest scope name / secret row needs, and
+   no wider — both bounded so a pathological value can't dominate. The detail
+   pane (the inspector) then takes 1fr: it fills whatever space is left. The
+   min-widths keep each pane readable before the layout has to scroll. */
+#scopes-pane { width: auto; min-width: 20; max-width: 40; }
 #scopes-table { width: auto; }
-#secrets-pane { width: 2fr; min-width: 32; }
-#detail-pane { width: 2fr; min-width: 36; max-width: 60; }
+#secrets-pane { width: auto; min-width: 34; max-width: 66; }
+#secrets-table { width: auto; }
+#detail-pane { width: 1fr; min-width: 38; }
 
 /* the scopes table cursor in the scopes section colour */
 #scopes-table > .datatable--cursor {

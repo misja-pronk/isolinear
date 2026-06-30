@@ -1,9 +1,17 @@
 """Capture REAL screenshots of the live Textual app (driven by test fakes).
 
-Not app code — a verification helper. Textual exports SVG; convert to PNG with
-macOS QuickLook if you want a raster:  qlmanage -t -s 1600 -o . after-*.svg
+Not app code — a docs helper. Textual exports SVG with a transparent page
+background, which we serve directly (docs/img/*.svg + the README) so the
+terminal window floats cleanly over any page, in light or dark mode — no white
+or coloured box. Regenerate and copy into place with:
 
     uv run python docs/redesign/capture.py
+    cp docs/redesign/after-main.svg        docs/img/browse.svg
+    cp docs/redesign/after-login.svg       docs/img/login.svg
+    cp docs/redesign/after-auth.svg        docs/img/auth.svg
+    cp docs/redesign/after-permissions.svg docs/img/perms.svg
+    cp docs/redesign/after-confirm.svg     docs/img/confirm.svg
+    cp docs/redesign/after-login-empty.svg docs/img/login-empty.svg
 """
 
 from __future__ import annotations
@@ -22,9 +30,6 @@ from isolinear.application import WorkspaceService  # noqa: E402
 from isolinear.domain import SOURCE_BUNDLE, Workspace  # noqa: E402
 
 SIZE = (112, 34)
-# Dark page behind the terminal window so the export has no white margin (which
-# looks bad in dark-mode docs). Matches the docs' graphite background.
-PAGE_BG = "#0e0f16"
 
 
 async def shot(
@@ -53,12 +58,6 @@ async def shot(
             .replace(
                 "font-family: arial",
                 "font-family: ui-sans-serif, -apple-system, Helvetica Neue, sans-serif",
-            )
-            .replace(
-                'xmlns="http://www.w3.org/2000/svg">',
-                'xmlns="http://www.w3.org/2000/svg">\n'
-                f'<rect width="100%" height="100%" fill="{PAGE_BG}"/>',
-                1,
             )
         )
         Path(path).write_text(svg)
