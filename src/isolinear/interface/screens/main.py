@@ -69,7 +69,7 @@ class MainScreen(Screen[None]):
         Binding("r", "refresh_scope", "Refresh", show=False),
         Binding("R", "refresh_workspace", "Refresh all", show=False),
         Binding("a", "auth", "Auth", show=False),
-        Binding("s", "sort_secrets", "Sort", show=False),
+        Binding("s", "sort", "Sort", show=False),
         Binding("slash", "filter", "Filter"),
         Binding("question_mark", "help", "Help"),
         Binding("escape", "cancel_filter", "Clear filter", show=False),
@@ -372,9 +372,12 @@ class MainScreen(Screen[None]):
             row = 0 if where == "top" else widget.row_count - 1
             widget.move_cursor(row=row)
 
-    def action_sort_secrets(self) -> None:
-        if getattr(self.focused, "id", None) == "secrets-table":
+    def action_sort(self) -> None:
+        fid = getattr(self.focused, "id", None)
+        if fid == "secrets-table":
             self.secrets_pane.cycle_sort()
+        elif fid == "scopes-table":
+            self.scopes_pane.cycle_sort()
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         """Context-aware footer — hide actions that don't fit the focused pane.
@@ -398,7 +401,7 @@ class MainScreen(Screen[None]):
             ("Manage scope permissions", self.action_permissions),
             ("Reveal secret value", self.action_reveal),
             ("Copy secret value", self.action_copy),
-            ("Sort secrets", self.action_sort_secrets),
+            ("Sort", self.action_sort),
             ("Refresh scope", self.action_refresh_scope),
             ("Refresh workspace", self.action_refresh_workspace),
             ("Authorization overview", self.action_auth),

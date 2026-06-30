@@ -80,6 +80,8 @@ class ScopesPane(Vertical):
         self._rows: list[ScopeRow] = []
         self._visible: list[ScopeRow] = []
         self._filter = ""
+        self._sort_col = 0  # 0=Scope, 1=Secrets
+        self._sort_rev = False
 
     def compose(self) -> ComposeResult:
         table: DataTable = DataTable(id="scopes-table", zebra_stripes=False)
@@ -101,8 +103,16 @@ class ScopesPane(Vertical):
     def _rebuild(self, *, focus: bool, keep: str | None = None) -> None:
         table = self.query_one(DataTable)
         table.clear(columns=True)
-        table.add_columns("Scope", "Secrets")
-        self._visible = [r for r in self._rows if fuzzy_match(self._filter, r.name)]
+        arrow = "↓" if self._sort_rev else "↑"
+        table.add_columns(
+            *(
+                f"{name} {arrow}" if i == self._sort_col else name
+                for i, name in enumerate(("Scope", "Secrets"))
+            )
+        )
+        self._visible = self._sorted(
+            [r for r in self._rows if fuzzy_match(self._filter, r.name)]
+        )
         for r in self._visible:
             table.add_row(r.name, Text(str(r.count), style="grey62"), key=r.name)
         table.display = bool(self._visible)
@@ -127,6 +137,36 @@ class ScopesPane(Vertical):
     def _highlighted(self, event: DataTable.RowHighlighted) -> None:
         if event.row_key is not None and event.row_key.value:
             self.post_message(self.Selected(event.row_key.value))
+
+    # ── sorting: click a column header, or cycle with the `s` key ──────
+    @on(DataTable.HeaderSelected, "#scopes-table")
+    def _header_clicked(self, event: DataTable.HeaderSelected) -> None:
+        self._set_sort(event.column_index)
+
+    def cycle_sort(self) -> None:
+        """Keyboard sort: flip direction, then advance to the next column."""
+        if not self._sort_rev:
+            self._sort_rev = True
+        else:
+            self._sort_rev = False
+            self._sort_col = (self._sort_col + 1) % 2
+        self._rebuild(focus=False, keep=self._cursor_scope())
+
+    def _set_sort(self, col: int) -> None:
+        if col == self._sort_col:
+            self._sort_rev = not self._sort_rev
+        else:
+            self._sort_col, self._sort_rev = col, False
+        self._rebuild(focus=False, keep=self._cursor_scope())
+
+    def _cursor_scope(self) -> str | None:
+        row = self.query_one(DataTable).cursor_row
+        return self._visible[row].name if 0 <= row < len(self._visible) else None
+
+    def _sorted(self, rows: list[ScopeRow]) -> list[ScopeRow]:
+        if self._sort_col == 0:  # Scope — alphabetical
+            return sorted(rows, key=lambda r: r.name.lower(), reverse=self._sort_rev)
+        return sorted(rows, key=lambda r: r.count, reverse=self._sort_rev)  # Secrets
 
 
 class SecretsPane(Vertical):
