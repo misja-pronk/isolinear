@@ -45,4 +45,21 @@ uv run --group docs mkdocs serve
 - ruff: line length **90**, rules `E`, `F`, `I`, `UP`, `B`, `SIM`.
 - ty must report no errors.
 
+## Releasing
+
+Releases are **version-driven** — `version` in `pyproject.toml` is the single
+source of truth, and merging a bump to `main` ships it.
+
+```sh
+uv version --bump patch   # or minor / major — edits pyproject.toml + uv.lock
+```
+
+Move the `## [Unreleased]` notes in `CHANGELOG.md` under a new `## [x.y.z]`
+heading, open a PR, and merge. The `release` workflow then publishes to PyPI
+(Trusted Publishing) and creates the matching `vX.Y.Z` tag + GitHub release.
+A merge that doesn't change the version does nothing.
+
+For the full process and the one-time PyPI setup, see
+[CONTRIBUTING.md](https://github.com/misja-pronk/isolinear/blob/main/CONTRIBUTING.md).
+
 For pull-request mechanics, see [CONTRIBUTING.md](https://github.com/misja-pronk/isolinear/blob/main/CONTRIBUTING.md) in the repository.
