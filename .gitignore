@@ -7,3 +7,6 @@ build/
 *.egg-info/
 .DS_Store
 docs/redesign/*.svg.png
+
+# generated reference renders (regenerate with docs/redesign/capture.py)
+docs/redesign/*.svg
