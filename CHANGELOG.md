@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Consistency: the authorization overview (`a`) and the scope-permissions modal
+  (`p`) tables are now sortable too — `s` or a header click, with a ↑/↓
+  indicator — like every other table in the app. Scope names in the
+  authorization overview are also coloured violet to match the rest of the UI.
+
 ## [0.2.5] - 2026-06-30
 
 ### Changed
