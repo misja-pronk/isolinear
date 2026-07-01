@@ -6,12 +6,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-06-30
+
+### Changed
+
+- Onboarding polish: dropped the redundant "Databricks secret management"
+  tagline (just the Isolinear mark over the workspace list now); the workspace
+  picker is sortable (press `s` or click a column header); and the Add by URL /
+  Quit buttons show their access keys (`a` / `q`).
+
 ### Fixed
 
 - The scopes pane now scales out to fit long scope names. A fixed `max-width`
   cap was clamping it even when the terminal had plenty of room, truncating long
   names and clipping the secret-count column; the cap is now proportional (50%
   of the row) so it grows with the terminal but never dominates a narrow one.
+- The onboarding workspace picker no longer clips the host or source columns.
+  Hosts were hard-truncated to 30 characters (even on a wide terminal); now the
+  full host shows and the login card sizes to fit its content, so long
+  Databricks hosts and the "· default" tag stay fully visible.
 
 ## [0.2.3] - 2026-06-30
 
@@ -105,7 +118,8 @@ Initial release.
 - Pre-loads and caches scopes/secrets/ACLs on startup.
 - Three switchable themes (violet, amber Okudagram, phosphor green).
 
-[Unreleased]: https://github.com/misja-pronk/isolinear/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/misja-pronk/isolinear/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/misja-pronk/isolinear/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/misja-pronk/isolinear/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/misja-pronk/isolinear/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/misja-pronk/isolinear/compare/v0.2.0...v0.2.1
