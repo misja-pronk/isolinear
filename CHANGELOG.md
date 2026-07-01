@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Form polish: a fixed field — the key when editing a secret, the principal when
+  editing an ACL — now reads as clearly read-only (muted, flat) instead of
+  looking editable. The grant/change-permission dialog also shows the scope it
+  applies to (violet, matching the scope-permissions modal's frame).
+
 ## [0.2.6] - 2026-06-30
 
 ### Changed
