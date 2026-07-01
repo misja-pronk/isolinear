@@ -6,12 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.7] - 2026-07-01
+
 ### Changed
 
 - Form polish: a fixed field — the key when editing a secret, the principal when
   editing an ACL — now reads as clearly read-only (muted, flat) instead of
   looking editable. The grant/change-permission dialog also shows the scope it
   applies to (violet, matching the scope-permissions modal's frame).
+- Help: the sort line now fits on one row ("Sort the focused table / click a
+  column") instead of wrapping mid-parenthesis.
 
 ## [0.2.6] - 2026-06-30
 
@@ -155,7 +159,8 @@ Initial release.
 - Pre-loads and caches scopes/secrets/ACLs on startup.
 - Three switchable themes (violet, amber Okudagram, phosphor green).
 
-[Unreleased]: https://github.com/misja-pronk/isolinear/compare/v0.2.6...HEAD
+[Unreleased]: https://github.com/misja-pronk/isolinear/compare/v0.2.7...HEAD
+[0.2.7]: https://github.com/misja-pronk/isolinear/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/misja-pronk/isolinear/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/misja-pronk/isolinear/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/misja-pronk/isolinear/compare/v0.2.3...v0.2.4
