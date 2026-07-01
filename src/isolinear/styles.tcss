@@ -211,6 +211,10 @@ ModalScreen {
     max-height: 90%;
     padding: 1 3;
     border: round $border;
+    /* the card MUST be opaque: the backdrop above is translucent ($background
+       88%), so without a solid fill the dimmed main screen bleeds through the
+       dialog and garbles the title + fields on real terminals. */
+    background: $background;
 }
 #dialog.danger {
     border: round $error;
