@@ -123,7 +123,7 @@ Button.-error:focus {
    no wider — both bounded so a pathological value can't dominate. The detail
    pane (the inspector) then takes 1fr: it fills whatever space is left. The
    min-widths keep each pane readable before the layout has to scroll. */
-#scopes-pane { width: auto; min-width: 20; max-width: 40; }
+#scopes-pane { width: auto; min-width: 20; max-width: 50%; }
 #scopes-table { width: auto; }
 #secrets-pane { width: auto; min-width: 34; max-width: 66; }
 #secrets-table { width: auto; }
