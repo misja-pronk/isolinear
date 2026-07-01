@@ -307,12 +307,14 @@ class MainScreen(Screen[None]):
             )
         self._render_breadcrumb()
         self._render_status()  # reset the seal indicator
+        self.refresh_bindings()  # footer reflects the new selection state
 
     def _show_secret(self, key: str) -> None:
         self.current_secret = key
         self._revealed = None
         self._render_secret()
         self._render_breadcrumb()
+        self.refresh_bindings()
 
     def _render_secret(self) -> None:
         if not (self.session and self.current_scope and self.current_secret):
@@ -351,7 +353,7 @@ class MainScreen(Screen[None]):
         self.secrets_pane.focus_table()
 
     # ── keyboard navigation ─────────────────────────────────────────────
-    _PANES = ("scopes-table", "secrets-table")
+    _PANES = ("scopes-table", "secrets-table", "acl-table")
 
     def action_vi(self, direction: str) -> None:
         fn = getattr(self.focused, f"action_cursor_{direction}", None)
@@ -362,13 +364,18 @@ class MainScreen(Screen[None]):
         current = getattr(self.focused, "id", None)
         idx = self._PANES.index(current) if current in self._PANES else 0
         step = 1 if direction == "right" else -1
-        target = self._PANES[(idx + step) % len(self._PANES)]
-        self.query_one(f"#{target}").focus()
+        # step to the next pane that's actually visible — the ACL table hides
+        # when the selection has no permissions.
+        for _ in range(len(self._PANES)):
+            idx = (idx + step) % len(self._PANES)
+            widget = self.query_one(f"#{self._PANES[idx]}")
+            if widget.display:
+                widget.focus()
+                return
 
     @on(events.DescendantFocus)
     def _focus_changed(self) -> None:
-        # the footer is context-aware (check_action keys off the focused pane);
-        # refresh it on *any* focus change — Tab, arrows, Enter-drill, or mouse.
+        # keep the footer fresh as focus moves between the three panes
         self.refresh_bindings()
 
     def action_jump(self, where: str) -> None:
@@ -383,17 +390,17 @@ class MainScreen(Screen[None]):
             self.secrets_pane.cycle_sort()
         elif fid == "scopes-table":
             self.scopes_pane.cycle_sort()
+        elif fid == "acl-table":
+            self.detail_pane.cycle_sort()
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
-        """Context-aware footer — hide actions that don't fit the focused pane.
-        In Textual, returning False hides AND disables a binding, so only hide
-        actions that are genuinely invalid in that context (everything else stays
-        usable from both panes)."""
-        fid = getattr(self.focused, "id", None)
+        """Context-aware footer — gate actions on the current *selection*, not the
+        focused pane, so the footer stays correct whichever of the three panes has
+        focus. In Textual, returning False hides AND disables the binding."""
         if action in ("reveal", "copy", "edit_secret"):
-            return fid == "secrets-table"  # need a selected secret
-        if action == "permissions":
-            return fid == "scopes-table"  # scope-level action
+            return self.current_secret is not None
+        if action in ("new_secret", "permissions"):
+            return self.current_scope is not None
         return True
 
     # ── command palette ─────────────────────────────────────────────────

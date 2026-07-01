@@ -6,7 +6,7 @@ workspaces, scopes, secrets, ACLs, identity.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 # Where a connection target was discovered. Shown to the user so it's always
@@ -92,3 +92,4 @@ class Identity:
     display_name: str = ""
     authenticated: bool = False
     error: str = ""
+    groups: list[str] = field(default_factory=list)  # group memberships (SCIM)
