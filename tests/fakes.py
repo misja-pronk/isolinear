@@ -22,6 +22,7 @@ class FakeSecretStore:
         values: dict[tuple[str, str], str] | None = None,
         identity: Identity | None = None,
         fail_on: set[str] | None = None,
+        no_read: set[str] | None = None,
     ) -> None:
         self.profile = profile
         self._scopes = scopes or []
@@ -30,6 +31,9 @@ class FakeSecretStore:
         self._values = values or {}
         self._identity = identity or Identity("me@corp.com", "Me", authenticated=True)
         self._fail_on = fail_on or set()
+        # scopes listed by list_scopes but whose secrets/ACLs the user can't read
+        # (models Databricks returning all scopes but denying per-scope access)
+        self._no_read = no_read or set()
         self.calls: list[tuple] = []
 
     def _record(self, *call) -> None:
@@ -63,6 +67,8 @@ class FakeSecretStore:
 
     def list_secrets(self, scope: str) -> list[Secret]:
         self._record("list_secrets", scope)
+        if scope in self._no_read:
+            raise StoreError(f"permission denied: {scope}")
         return sorted(self._secrets.get(scope, []), key=lambda s: s.key.lower())
 
     def get_secret_value(self, scope: str, key: str) -> str:
@@ -82,6 +88,8 @@ class FakeSecretStore:
 
     def list_acls(self, scope: str) -> list[Acl]:
         self._record("list_acls", scope)
+        if scope in self._no_read:
+            raise StoreError(f"permission denied: {scope}")
         return sorted(self._acls.get(scope, []), key=lambda a: a.principal.lower())
 
     def put_acl(self, scope: str, principal: str, permission: str) -> None:

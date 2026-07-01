@@ -8,6 +8,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.2.8] - 2026-07-01
 
+### Added
+
+- Scopes list now shows only the scopes you can actually access, cutting the
+  noise in workspaces full of other teams' scopes. Access is judged by whether
+  your secrets list loads (which needs READ) — not by the ACLs, which you often
+  can't read without MANAGE — so scopes you hold READ/WRITE on aren't wrongly
+  hidden. Press `f` to toggle between "only mine" and every scope in the
+  workspace. "Your access" now reads READ (not "none") for a scope you can list
+  but whose ACLs are off-limits.
+
 ### Fixed
 
 - Modal dialogs (new/edit secret, grant/change permission, and every other

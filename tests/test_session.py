@@ -31,6 +31,31 @@ def test_warm_scope_swallows_store_errors():
     assert s.secrets_for("prod") == []
 
 
+def test_warm_scope_marks_readability_per_scope():
+    # 'mine' lists fine (readable); 'theirs' denies reads (visible but no access)
+    gw = FakeSecretStore(
+        scopes=[Scope("mine"), Scope("theirs")],
+        secrets={"mine": []},
+        no_read={"theirs"},
+    )
+    s = WorkspaceService(gw, "t")
+    s.load_scopes()
+    s.warm_scope("mine")
+    s.warm_scope("theirs")  # must not raise even though both reads fail
+    assert s.is_readable("mine")
+    assert not s.is_readable("theirs")
+    # the auth summary reflects it: READ floor for the one you can read, none else
+    access = {a.scope: a.effective for a in s.auth_summary()}
+    assert access == {"mine": "READ", "theirs": "—"}
+
+
+def test_created_scope_is_readable():
+    s = WorkspaceService(FakeSecretStore(scopes=[]), "t")
+    s.load_scopes()
+    s.create_scope("fresh")
+    assert s.is_readable("fresh")
+
+
 def test_reveal_caches_value(session: WorkspaceService):
     gw = cast(FakeSecretStore, session._store)
     first = session.reveal("prod", "api-key")

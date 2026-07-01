@@ -60,12 +60,22 @@ class WorkspaceService:
         return scopes
 
     def warm_scope(self, scope: str) -> None:
-        """Pull secret metadata + ACLs for one scope into the read model."""
+        """Pull secret metadata + ACLs for one scope into the read model.
+
+        The two reads are gated by different permissions (list_secrets needs
+        READ, list_acls needs MANAGE), so they're tried independently: succeeding
+        at list_secrets is what marks a scope readable — i.e. one the user can
+        actually see — even when its ACLs are off-limits.
+        """
         try:
             self.cache.secrets[scope] = self._store.list_secrets(scope)
-            self.cache.acls[scope] = self._store.list_acls(scope)
+            self.cache.readable.add(scope)
         except StoreError:
             self.cache.secrets.setdefault(scope, [])
+            self.cache.readable.discard(scope)
+        try:
+            self.cache.acls[scope] = self._store.list_acls(scope)
+        except StoreError:
             self.cache.acls.setdefault(scope, [])
 
     def warm_all(self) -> Iterator[tuple[int, int, Scope]]:
@@ -81,6 +91,10 @@ class WorkspaceService:
 
     def acls_for(self, scope: str) -> list[Acl]:
         return self.cache.acls_for(scope)
+
+    def is_readable(self, scope: str) -> bool:
+        """Whether the user can list this scope's secrets (holds ≥ READ)."""
+        return scope in self.cache.readable
 
     def scope(self, name: str) -> Scope | None:
         return next((s for s in self.cache.scopes if s.name == name), None)
@@ -116,6 +130,7 @@ class WorkspaceService:
     def create_scope(self, name: str) -> None:
         self._store.create_scope(name)
         self.cache.add_scope(Scope(name=name))
+        self.cache.readable.add(name)  # you just made it — you can read it
 
     def delete_scope(self, name: str) -> None:
         self._store.delete_scope(name)
@@ -137,5 +152,8 @@ class WorkspaceService:
     # -- authorization overview ----------------------------------------
     def auth_summary(self) -> list[AuthSummary]:
         return authorization_summary(
-            self.cache.identity, self.cache.scopes, self.cache.acls
+            self.cache.identity,
+            self.cache.scopes,
+            self.cache.acls,
+            self.cache.readable,
         )
