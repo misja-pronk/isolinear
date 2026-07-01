@@ -51,6 +51,11 @@ class DatabricksSecretStore:
                 user_name=me.user_name or "",
                 display_name=getattr(me, "display_name", "") or me.user_name or "",
                 authenticated=True,
+                # SCIM group memberships — so ACLs granted to a group you're in
+                # count toward your effective access, not just direct user ACLs.
+                groups=[
+                    g.display for g in (getattr(me, "groups", None) or []) if g.display
+                ],
             )
         except Exception as exc:  # noqa: BLE001 - surface any auth/connectivity issue
             return Identity(authenticated=False, error=_short(exc))

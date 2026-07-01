@@ -34,16 +34,20 @@ def authorization_summary(
     scopes: list[Scope],
     acls_by_scope: Mapping[str, list[Acl]],
 ) -> list[AuthSummary]:
-    """Compute the current user's effective permission on each scope (US-13)."""
-    me = identity.user_name
+    """Compute the current user's effective permission on each scope (US-13).
+
+    "Effective" is the highest permission granted to any principal that is *you*:
+    your username, the `users` group (everyone), or any group you belong to — so
+    group-based access (the common case) counts, not just direct user ACLs.
+    """
+    mine = {identity.user_name, "users"} | set(identity.groups)
     summaries: list[AuthSummary] = []
     for scope in scopes:
         acls = acls_by_scope.get(scope.name, [])
         effective = "—"
         best = 0
         for acl in acls:
-            is_mine = acl.principal in (me, "users", "admins")
-            if is_mine and perm_rank(acl.permission) > best:
+            if acl.principal in mine and perm_rank(acl.permission) > best:
                 best = perm_rank(acl.permission)
                 effective = acl.permission
         summaries.append(

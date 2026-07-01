@@ -12,12 +12,12 @@ from dataclasses import dataclass
 from rich.markup import escape
 from rich.text import Text
 from textual import on
-from textual.app import ComposeResult
+from textual.app import App, ComposeResult
 from textual.containers import Vertical, VerticalScroll
 from textual.message import Message
 from textual.widgets import DataTable, Static
 
-from ..domain import Acl, Scope, Secret
+from ..domain import Acl, Scope, Secret, perm_rank
 
 
 def fuzzy_match(query: str, text: str) -> bool:
@@ -56,6 +56,14 @@ def perm_markup(permission: str) -> str:
     color = PERM_COLOR.get(permission, "$foreground")
     weight = " b" if permission == "MANAGE" else ""
     return f"[{color}{weight}]{permission}[/]"
+
+
+def perm_cell(app: App, permission: str) -> Text:
+    """A DataTable cell for a permission level, coloured by privilege."""
+    var = PERM_COLOR.get(permission, "$foreground").lstrip("$")
+    color = app.theme_variables.get(var, "")
+    style = f"bold {color}" if permission == "MANAGE" else color
+    return Text(permission, style=style)
 
 
 @dataclass
@@ -286,20 +294,30 @@ class SecretsPane(Vertical):
 
 
 class DetailPane(Vertical):
-    """Right pane: metadata + ACLs for the selection, and the secret value."""
+    """Right pane: metadata + a sortable ACL table for the selection, + the value."""
 
     def __init__(self) -> None:
         super().__init__(id="detail-pane", classes="pane")
+        self._acls: list[Acl] = []
+        self._sort_col = 1  # 0=Principal, 1=Access
+        self._sort_rev = True  # Access, highest privilege first
 
     def compose(self) -> ComposeResult:
-        # not focusable: keeps Tab/focus on the two tables so the context-aware
-        # footer always has a real pane to reason about (mouse wheel still scrolls)
-        with VerticalScroll(can_focus=False):
-            yield Static("", id="detail-body")
+        with VerticalScroll(id="detail-scroll", can_focus=False):
+            yield Static("", id="detail-head")
+            yield Static("", id="detail-perms")
+            table: DataTable = DataTable(id="acl-table", zebra_stripes=False)
+            table.cursor_type = "row"
+            yield table
+            yield Static("", id="detail-foot")
             yield Static("", id="detail-value", classes="secret-value")
 
-    def _body(self, markup: str) -> None:
-        self.query_one("#detail-body", Static).update(markup)
+    # ── section setters ─────────────────────────────────────────────
+    def _head(self, markup: str) -> None:
+        self.query_one("#detail-head", Static).update(markup)
+
+    def _foot(self, markup: str) -> None:
+        self.query_one("#detail-foot", Static).update(markup)
 
     def _hide_value(self) -> None:
         self.query_one("#detail-value").display = False
@@ -312,8 +330,12 @@ class DetailPane(Vertical):
 
     def clear(self) -> None:
         """The 'nothing selected' state."""
+        self._acls = []
         self._hide_value()
-        self._body(
+        self.query_one("#detail-perms", Static).update("")
+        self._foot("")
+        self.query_one("#acl-table", DataTable).display = False
+        self._head(
             "\n[$text-muted]Nothing selected.[/]"
             "\n[$text-muted]Pick a scope on the left.[/]"
         )
@@ -324,23 +346,19 @@ class DetailPane(Vertical):
         self._hide_value()
         backend = "Azure Key Vault" if scope.is_keyvault else "Databricks-backed"
         access_text = perm_markup(access) if access != "—" else "[$text-muted]none[/]"
-        lines = [
-            f"[b]{escape(scope.name)}[/]",
-            "",
-            f"[$text-muted]Backend[/]      {backend}",
-            f"[$text-muted]Secrets[/]      {secret_count}",
-            f"[$text-muted]Your access[/]  {access_text}",
-            "",
-            f"[$text-muted]Permissions[/]  [dim]{len(acls)}[/]",
-        ]
-        if acls:
-            lines += [
-                f"  {escape(a.principal)}  {perm_markup(a.permission)}" for a in acls
-            ]
-        else:
-            lines.append("  [$text-muted](none)[/]")
-        lines += ["", "[$text-muted]p to manage permissions[/]"]
-        self._body("\n".join(lines))
+        self._head(
+            "\n".join(
+                [
+                    f"[b $scopes-color]{escape(scope.name)}[/]",
+                    "",
+                    f"[$text-muted]Backend[/]      {backend}",
+                    f"[$text-muted]Secrets[/]      {secret_count}",
+                    f"[$text-muted]Your access[/]  {access_text}",
+                ]
+            )
+        )
+        self._show_acls(acls)
+        self._foot("[$text-muted]p to manage permissions[/]")
 
     def show_secret(
         self,
@@ -354,33 +372,77 @@ class DetailPane(Vertical):
         acls = acls or []
         updated = secret.last_updated if secret else "—"
         access_text = perm_markup(access) if access != "—" else "[$text-muted]none[/]"
-        lines = [
-            f"[b]{escape(key)}[/]",
-            "",
-            f"[$text-muted]Scope[/]        {escape(scope)}",
-            f"[$text-muted]Updated[/]      {updated}",
-            f"[$text-muted]Your access[/]  {access_text}",
-            "",
-            f"[$text-muted]Permissions[/]  [dim]{len(acls)}[/]",
-        ]
-        if acls:
-            lines += [
-                f"  {escape(a.principal)}  {perm_markup(a.permission)}" for a in acls
-            ]
-        else:
-            lines.append("  [$text-muted](none)[/]")
-        lines.append("")
+        self._head(
+            "\n".join(
+                [
+                    f"[b $secrets-color]{escape(key)}[/]",
+                    "",
+                    f"[$text-muted]Scope[/]        [$scopes-color]{escape(scope)}[/]",
+                    f"[$text-muted]Updated[/]      {updated}",
+                    f"[$text-muted]Your access[/]  {access_text}",
+                ]
+            )
+        )
+        self._show_acls(acls)
         if value is not None:
-            lines += [
-                "[$text-muted]Value[/]        [$detail-color]revealed[/]",
-                "[dim]space to hide · c to copy[/]",
-            ]
-            self._body("\n".join(lines))
+            self._foot(
+                "[$text-muted]Value[/]        [$value-color]revealed[/]\n"
+                "[dim]space to hide · c to copy[/]"
+            )
             self.show_value(value)
         else:
-            lines += [
-                "[$text-muted]Value[/]        [dim]••••••••[/]",
-                "[dim]space to reveal[/]",
-            ]
+            self._foot(
+                "[$text-muted]Value[/]        [dim]••••••••[/]\n[dim]space to reveal[/]"
+            )
             self._hide_value()
-            self._body("\n".join(lines))
+
+    # ── the sortable ACL table ──────────────────────────────────────
+    def _show_acls(self, acls: list[Acl]) -> None:
+        self._acls = acls
+        self.query_one("#detail-perms", Static).update(
+            f"[$text-muted]Permissions[/]  [dim]{len(acls)}[/]"
+        )
+        self._populate_acls()
+
+    def _populate_acls(self) -> None:
+        table = self.query_one("#acl-table", DataTable)
+        table.clear(columns=True)
+        table.display = bool(self._acls)
+        if not self._acls:
+            return
+        arrow = "↓" if self._sort_rev else "↑"
+        cols = ("Principal", "Access")
+        table.add_columns(
+            *(f"{c} {arrow}" if i == self._sort_col else c for i, c in enumerate(cols))
+        )
+        for a in self._sorted_acls():
+            table.add_row(a.principal, perm_cell(self.app, a.permission), key=a.principal)
+
+    def _sorted_acls(self) -> list[Acl]:
+        if self._sort_col == 0:  # Principal — alphabetical
+            return sorted(
+                self._acls, key=lambda a: a.principal.lower(), reverse=self._sort_rev
+            )
+        # Access — by privilege, then principal
+        return sorted(
+            self._acls,
+            key=lambda a: (perm_rank(a.permission), a.principal.lower()),
+            reverse=self._sort_rev,
+        )
+
+    def cycle_sort(self) -> None:
+        """Keyboard sort: flip direction, then advance to the next column."""
+        if not self._sort_rev:
+            self._sort_rev = True
+        else:
+            self._sort_rev = False
+            self._sort_col = (self._sort_col + 1) % 2
+        self._populate_acls()
+
+    @on(DataTable.HeaderSelected, "#acl-table")
+    def _sort_by_header(self, event: DataTable.HeaderSelected) -> None:
+        if event.column_index == self._sort_col:
+            self._sort_rev = not self._sort_rev
+        else:
+            self._sort_col, self._sort_rev = event.column_index, False
+        self._populate_acls()

@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import asyncio
 
-from rich.text import Text
 from textual import on, work
-from textual.app import App, ComposeResult
+from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
@@ -14,17 +13,9 @@ from textual.widgets import Button, DataTable, Input, Select, Static
 
 from ..application import WorkspaceService
 from ..domain import AuthSummary, Identity, StoreError, perm_rank
-from .widgets import PERM_COLOR
+from .widgets import perm_cell
 
 PERMISSIONS = ["READ", "WRITE", "MANAGE"]
-
-
-def perm_cell(app: App, permission: str) -> Text:
-    """A DataTable cell for a permission level, coloured by privilege."""
-    var = PERM_COLOR.get(permission, "$foreground").lstrip("$")
-    color = app.theme_variables.get(var, "")
-    style = f"bold {color}" if permission == "MANAGE" else color
-    return Text(permission, style=style)
 
 
 def key_label(label: str) -> str:

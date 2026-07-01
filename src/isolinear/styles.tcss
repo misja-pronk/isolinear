@@ -162,16 +162,30 @@ DataTable > .datatable--header {
 }
 
 /* ── detail pane ─────────────────────────────────────────────── */
-#detail-body {
+#detail-head, #detail-perms, #detail-foot {
     padding: 0 1;
+}
+#detail-perms, #detail-foot {
+    margin-top: 1;
+}
+/* the ACL table — sized to its rows, amber cursor to match the section */
+#acl-table {
+    height: auto;
+    max-height: 12;
+}
+#acl-table > .datatable--cursor {
+    background: $detail-color 18%;
+}
+#acl-table:focus > .datatable--cursor {
+    background: $detail-color 35%;
 }
 /* a revealed value — a quiet framed card, green = live */
 .secret-value {
     display: none;
-    border: round $detail-color;
+    border: round $value-color;
     padding: 0 1;
     margin: 1 2 1 1;  /* extra right margin so the border clears the scroll gutter */
-    color: $detail-color;
+    color: $value-color;
 }
 
 /* friendly empty states */

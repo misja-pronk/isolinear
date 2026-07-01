@@ -6,6 +6,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-06-30
+
+### Changed
+
+- Detail-pane colour-coding: the secret key is now cyan (echoing the secrets
+  section), the scope is violet (echoing the scopes section), and a revealed
+  value has its own green "live" colour.
+- The detail pane's permissions are now a proper sortable table (Principal /
+  Access), like the scopes and secrets tables — reach it with Tab and sort with
+  `s` or a header click (privilege-coloured, sorted by access by default). The
+  detail pane is now focusable, and the footer reflects your current selection
+  rather than which pane has focus.
+
+### Fixed
+
+- "Your access" now resolves **group-based** permissions. It takes the highest
+  permission granted to you, to the `users` group (everyone), or to any group
+  you belong to (fetched from your SCIM group memberships) — so access via a
+  group no longer shows as "none". It also no longer wrongly treated every user
+  as a member of the `admins` group.
+
 ## [0.2.4] - 2026-06-30
 
 ### Changed
@@ -118,7 +139,8 @@ Initial release.
 - Pre-loads and caches scopes/secrets/ACLs on startup.
 - Three switchable themes (violet, amber Okudagram, phosphor green).
 
-[Unreleased]: https://github.com/misja-pronk/isolinear/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/misja-pronk/isolinear/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/misja-pronk/isolinear/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/misja-pronk/isolinear/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/misja-pronk/isolinear/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/misja-pronk/isolinear/compare/v0.2.1...v0.2.2

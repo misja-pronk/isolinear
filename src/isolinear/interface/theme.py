@@ -39,6 +39,7 @@ ISOLINEAR_GRAPHITE = Theme(
         "scopes-color": "#8b7cff",
         "secrets-color": "#4ec9e0",
         "detail-color": "#e0b24a",
+        "value-color": "#5fd39a",  # green — a revealed / live value
     },
 )
 
@@ -68,6 +69,7 @@ ISOLINEAR_VIOLET = Theme(
         "scopes-color": "#7c5cff",
         "secrets-color": "#29e0c4",
         "detail-color": "#ff9f1c",
+        "value-color": "#4ee39a",
     },
 )
 
@@ -95,6 +97,7 @@ ISOLINEAR_AMBER = Theme(
         "scopes-color": "#ff9f43",
         "secrets-color": "#6bb6ff",
         "detail-color": "#ffd166",
+        "value-color": "#5ad19b",
     },
 )
 
@@ -122,6 +125,7 @@ ISOLINEAR_PHOSPHOR = Theme(
         "scopes-color": "#5ad27a",
         "secrets-color": "#82c8b0",
         "detail-color": "#d7d77a",
+        "value-color": "#7fd6c0",
     },
 )
 

@@ -45,6 +45,7 @@ class IsolinearApp(App[None]):
             "scopes-color": "#8b7cff",
             "secrets-color": "#4ec9e0",
             "detail-color": "#e0b24a",
+            "value-color": "#5fd39a",
         }
 
     def on_mount(self) -> None:
