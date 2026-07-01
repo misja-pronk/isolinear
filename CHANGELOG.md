@@ -12,6 +12,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   cap was clamping it even when the terminal had plenty of room, truncating long
   names and clipping the secret-count column; the cap is now proportional (50%
   of the row) so it grows with the terminal but never dominates a narrow one.
+- The onboarding workspace picker no longer clips the host or source columns.
+  Hosts were hard-truncated to 30 characters (even on a wide terminal); now the
+  full host shows and the login card sizes to fit its content, so long
+  Databricks hosts and the "· default" tag stay fully visible.
 
 ## [0.2.3] - 2026-06-30
 

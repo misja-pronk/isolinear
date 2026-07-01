@@ -260,12 +260,15 @@ LoginScreen {
     width: 72;
     max-width: 92%;
     height: auto;
-    padding: 2 4;
+    padding: 2 3;
     border: round $border;
 }
-/* wider when showing the workspaces table */
+/* when showing the workspaces table, size to the table's content (so hosts +
+   source aren't clipped) — bounded so it never overflows a narrow terminal */
 #login-card.browse {
-    width: 92;
+    width: auto;
+    min-width: 72;
+    max-width: 100%;
 }
 #ws-table {
     height: auto;

@@ -137,7 +137,7 @@ class LoginScreen(Screen[ConnectResult | None]):
         table.add_columns("Workspace", "Host", "Source")
         default_row = 0
         for i, ws in enumerate(self._workspaces):
-            table.add_row(ws.name, _trunc(ws.host_label, 30), ws.source_label, key=str(i))
+            table.add_row(ws.name, _trunc(ws.host_label, 48), ws.source_label, key=str(i))
             if ws.default:
                 default_row = i
         table.move_cursor(row=default_row)
