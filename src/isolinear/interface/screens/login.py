@@ -27,6 +27,7 @@ from textual.widgets import Button, DataTable, Input, Static
 
 from ...application import Connection, OnboardingService
 from ...domain import SOURCE_PROFILE, AuthError, Workspace
+from ..modals import key_label
 
 
 @dataclass
@@ -82,7 +83,9 @@ class LoginScreen(Screen[ConnectResult | None]):
 
     BINDINGS = [
         Binding("escape", "back", "Back", show=False),
-        Binding("u", "add_url", "Add by URL", show=False),
+        Binding("a,u", "add_url", "Add by URL", show=False),
+        Binding("s", "sort", "Sort", show=False),
+        Binding("q", "quit_app", "Quit", show=False),
     ]
 
     def __init__(
@@ -95,20 +98,21 @@ class LoginScreen(Screen[ConnectResult | None]):
         self._workspaces = workspaces
         self._onboarding = onboarding
         self._can_cancel = can_cancel
+        self._sort_col: int | None = None  # None = natural order (default first)
+        self._sort_rev = False
+        self._order: list[int] = []  # display row -> index into _workspaces
 
     def compose(self) -> ComposeResult:
         card_classes = "browse" if self._workspaces else ""
         with Center(), Vertical(id="login-card", classes=card_classes):
             yield Static("Isolinear", id="login-wordmark")
             yield Static("[$primary]▂▂[/][$success]▂▂[/][$warning]▂▂[/]", id="login-mark")
-            yield Static(
-                "[$text-muted]Databricks secret management[/]", id="login-tagline"
-            )
             if self._workspaces:
                 yield Static("WORKSPACES", classes="login-section")
                 table: DataTable = DataTable(id="ws-table", zebra_stripes=False)
                 table.cursor_type = "row"
                 yield table
+                yield Static("[$text-muted]enter connect  ·  s sort[/]", id="login-hint")
             else:
                 yield Static("GET STARTED", classes="login-section")
                 yield Static(
@@ -118,11 +122,11 @@ class LoginScreen(Screen[ConnectResult | None]):
                 )
             with Horizontal(id="login-actions"):
                 yield Button(
-                    "Add by URL",
+                    key_label("Add by URL"),
                     id="btn-url",
                     variant="default" if self._workspaces else "primary",
                 )
-                yield Button("Quit", id="btn-quit")
+                yield Button(key_label("Quit"), id="btn-quit")
             yield Static("", id="login-status")
 
     def on_mount(self) -> None:
@@ -134,13 +138,62 @@ class LoginScreen(Screen[ConnectResult | None]):
 
     def _populate(self) -> None:
         table = self.query_one("#ws-table", DataTable)
-        table.add_columns("Workspace", "Host", "Source")
-        default_row = 0
-        for i, ws in enumerate(self._workspaces):
+        keep = self._cursor_index()  # preserve the selection across a re-sort
+        table.clear(columns=True)
+        arrow = "↓" if self._sort_rev else "↑"
+        cols = ("Workspace", "Host", "Source")
+        table.add_columns(
+            *(f"{c} {arrow}" if i == self._sort_col else c for i, c in enumerate(cols))
+        )
+        self._order = self._sorted_indices()
+        cursor = 0
+        for row, i in enumerate(self._order):
+            ws = self._workspaces[i]
             table.add_row(ws.name, _trunc(ws.host_label, 48), ws.source_label, key=str(i))
-            if ws.default:
-                default_row = i
-        table.move_cursor(row=default_row)
+            if (keep is None and ws.default) or keep == i:
+                cursor = row
+        table.move_cursor(row=cursor)
+
+    def _sorted_indices(self) -> list[int]:
+        """Row order for the current sort; natural order (default first) if unsorted."""
+        idx = list(range(len(self._workspaces)))
+        if self._sort_col is None:
+            return idx
+        fields = (
+            lambda w: w.name.lower(),
+            lambda w: w.host_label.lower(),
+            lambda w: w.source_label.lower(),
+        )
+        field = fields[self._sort_col]
+        return sorted(
+            idx, key=lambda i: field(self._workspaces[i]), reverse=self._sort_rev
+        )
+
+    def _cursor_index(self) -> int | None:
+        """Original index of the currently-selected workspace (survives a re-sort)."""
+        if not self._order:
+            return None
+        row = self.query_one("#ws-table", DataTable).cursor_row
+        return self._order[row] if 0 <= row < len(self._order) else None
+
+    def action_sort(self) -> None:
+        """Cycle the sort: unsorted → col asc → col desc → next col …"""
+        if self._sort_col is None:
+            self._sort_col, self._sort_rev = 0, False
+        elif not self._sort_rev:
+            self._sort_rev = True
+        else:
+            self._sort_rev = False
+            self._sort_col = (self._sort_col + 1) % 3
+        self._populate()
+
+    @on(DataTable.HeaderSelected, "#ws-table")
+    def _sort_by_header(self, event: DataTable.HeaderSelected) -> None:
+        if event.column_index == self._sort_col:
+            self._sort_rev = not self._sort_rev
+        else:
+            self._sort_col, self._sort_rev = event.column_index, False
+        self._populate()
 
     def _status(self, text: str) -> None:
         self.query_one("#login-status", Static).update(text)
@@ -148,9 +201,9 @@ class LoginScreen(Screen[ConnectResult | None]):
     # -- connect a listed workspace -------------------------------------
     @on(DataTable.RowSelected, "#ws-table")
     def _row_selected(self, event: DataTable.RowSelected) -> None:
-        idx = event.cursor_row
-        if 0 <= idx < len(self._workspaces):
-            self._connect(self._workspaces[idx])
+        key = event.row_key.value  # the workspace's original index (survives sorting)
+        if key is not None:
+            self._connect(self._workspaces[int(key)])
 
     @work(group="login")
     async def _connect(self, ws: Workspace) -> None:
@@ -195,6 +248,9 @@ class LoginScreen(Screen[ConnectResult | None]):
     # -- exit -----------------------------------------------------------
     @on(Button.Pressed, "#btn-quit")
     def _quit(self) -> None:
+        self.action_quit_app()
+
+    def action_quit_app(self) -> None:
         self.app.exit()
 
     def action_back(self) -> None:

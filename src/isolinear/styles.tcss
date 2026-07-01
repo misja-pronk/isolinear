@@ -284,10 +284,11 @@ LoginScreen {
     text-align: center;
     margin-bottom: 1;
 }
-#login-tagline {
+/* keyboard hint under the workspaces table */
+#login-hint {
     text-align: center;
     color: $text-muted;
-    margin-bottom: 1;
+    margin-top: 1;
 }
 .login-section {
     color: $text-muted;

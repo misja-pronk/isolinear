@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Onboarding polish: dropped the redundant "Databricks secret management"
+  tagline (just the Isolinear mark over the workspace list now); the workspace
+  picker is sortable (press `s` or click a column header); and the Add by URL /
+  Quit buttons show their access keys (`a` / `q`).
+
 ### Fixed
 
 - The scopes pane now scales out to fit long scope names. A fixed `max-width`
