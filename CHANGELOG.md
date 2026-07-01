@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- The scopes pane now scales out to fit long scope names. A fixed `max-width`
+  cap was clamping it even when the terminal had plenty of room, truncating long
+  names and clipping the secret-count column; the cap is now proportional (50%
+  of the row) so it grows with the terminal but never dominates a narrow one.
+
 ## [0.2.3] - 2026-06-30
 
 ### Changed
