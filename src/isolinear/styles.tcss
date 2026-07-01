@@ -234,6 +234,13 @@ ModalScreen {
 #dialog Input {
     margin: 1 0;
 }
+/* a fixed field (the key when editing a secret, the principal when editing an
+   ACL) reads as clearly read-only, not an editable input */
+#dialog Input:disabled {
+    color: $text-muted;
+    background: transparent;
+    border: round $border 40%;
+}
 #dialog .buttons {
     align-horizontal: right;
     height: auto;

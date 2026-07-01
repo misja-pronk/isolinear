@@ -147,7 +147,7 @@ class HelpScreen(ModalScreen[None]):
         ("g / G", "Jump to top / bottom"),
         ("enter", "Drill scope → secrets"),
         ("/", "Filter the focused pane"),
-        ("s", "Sort the focused table (or click a column)"),
+        ("s", "Sort the focused table / click a column"),
         ("", ""),
         ("n / N", "New secret / new scope"),
         ("e", "Edit secret value"),
@@ -259,17 +259,23 @@ class AclFormModal(ModalScreen[tuple[str, str] | None]):
     BINDINGS = [Binding("escape", "cancel", "Cancel")]
 
     def __init__(
-        self, principal: str = "", permission: str = "READ", edit: bool = False
+        self,
+        principal: str = "",
+        permission: str = "READ",
+        edit: bool = False,
+        scope: str = "",
     ) -> None:
         super().__init__()
         self._principal = principal
         self._permission = permission if permission in PERMISSIONS else "READ"
         self._edit = edit
+        self._scope = scope
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="dialog"):
+        with Vertical(id="dialog", classes="scope"):
             verb = "Change permission" if self._edit else "Grant permission"
-            yield Static(verb, classes="dialog-title")
+            title = f"{verb}   [$scopes-color]{self._scope}[/]" if self._scope else verb
+            yield Static(title, classes="dialog-title")
             principal = Input(
                 value=self._principal,
                 placeholder="principal (user, group, or service principal)",
@@ -401,7 +407,7 @@ class PermissionsScreen(ModalScreen[None]):
         self._populate()
 
     def action_add(self) -> None:
-        self.app.push_screen(AclFormModal(), self._on_form)
+        self.app.push_screen(AclFormModal(scope=self._scope), self._on_form)
 
     def action_edit(self) -> None:
         principal = self._selected()
@@ -416,6 +422,7 @@ class PermissionsScreen(ModalScreen[None]):
                 principal=principal,
                 permission=current.permission if current else "READ",
                 edit=True,
+                scope=self._scope,
             ),
             self._on_form,
         )
