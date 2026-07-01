@@ -33,13 +33,21 @@ def authorization_summary(
     identity: Identity,
     scopes: list[Scope],
     acls_by_scope: Mapping[str, list[Acl]],
+    readable: set[str] | None = None,
 ) -> list[AuthSummary]:
     """Compute the current user's effective permission on each scope (US-13).
 
     "Effective" is the highest permission granted to any principal that is *you*:
     your username, the `users` group (everyone), or any group you belong to — so
     group-based access (the common case) counts, not just direct user ACLs.
+
+    `readable` is the set of scopes whose secrets we could actually list. Listing
+    a scope's ACLs needs MANAGE, so for a scope where you only hold READ/WRITE the
+    ACLs come back empty and no grant looks like *yours* — yet you clearly have
+    access. So we floor the effective permission to READ for any readable scope
+    with no visible self-grant, rather than reporting "none".
     """
+    readable = readable or set()
     mine = {identity.user_name, "users"} | set(identity.groups)
     summaries: list[AuthSummary] = []
     for scope in scopes:
@@ -50,6 +58,8 @@ def authorization_summary(
             if acl.principal in mine and perm_rank(acl.permission) > best:
                 best = perm_rank(acl.permission)
                 effective = acl.permission
+        if best == 0 and scope.name in readable:
+            best, effective = perm_rank("READ"), "READ"
         summaries.append(
             AuthSummary(
                 scope=scope.name,

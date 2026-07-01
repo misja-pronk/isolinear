@@ -87,6 +87,7 @@ class ScopesPane(Vertical):
         self._rows: list[ScopeRow] = []
         self._visible: list[ScopeRow] = []
         self._filter = ""
+        self._empty_hint: str | None = None
         self._sort_col = 0  # 0=Scope, 1=Secrets
         self._sort_rev = False
 
@@ -97,10 +98,16 @@ class ScopesPane(Vertical):
         yield Static("", id="scopes-empty", classes="empty-hint")
 
     def show(
-        self, rows: list[ScopeRow], *, keep: str | None = None, focus: bool = True
+        self,
+        rows: list[ScopeRow],
+        *,
+        keep: str | None = None,
+        focus: bool = True,
+        empty_hint: str | None = None,
     ) -> None:
         self._rows = rows
         self._filter = ""
+        self._empty_hint = empty_hint
         self._rebuild(focus=focus, keep=keep)
 
     def apply_filter(self, text: str) -> None:
@@ -125,7 +132,9 @@ class ScopesPane(Vertical):
         table.display = bool(self._visible)
         hint = self.query_one("#scopes-empty", Static)
         hint.display = not self._visible
-        if not self._rows:
+        if not self._rows and self._empty_hint:
+            hint.update(self._empty_hint)
+        elif not self._rows:
             hint.update(
                 "[$text-muted]No scopes yet.\nPress [b $primary]N[/] to create.[/]"
             )

@@ -6,6 +6,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.8] - 2026-07-01
+
+### Added
+
+- Scopes list now shows only the scopes you can actually access, cutting the
+  noise in workspaces full of other teams' scopes. Access is judged by whether
+  your secrets list loads (which needs READ) — not by the ACLs, which you often
+  can't read without MANAGE — so scopes you hold READ/WRITE on aren't wrongly
+  hidden. Press `f` to toggle between "only mine" and every scope in the
+  workspace. "Your access" now reads READ (not "none") for a scope you can list
+  but whose ACLs are off-limits.
+
+### Fixed
+
+- Modal dialogs (new/edit secret, grant/change permission, and every other
+  dialog) no longer show rendering artifacts — a garbled title and blank
+  fields — on real terminals. The dialog card had no opaque fill, so the
+  translucent backdrop let the dimmed main screen bleed through it; the card
+  is now solid. Guarded by a test that asserts every modal card is opaque.
+
 ## [0.2.7] - 2026-07-01
 
 ### Changed
@@ -159,7 +179,8 @@ Initial release.
 - Pre-loads and caches scopes/secrets/ACLs on startup.
 - Three switchable themes (violet, amber Okudagram, phosphor green).
 
-[Unreleased]: https://github.com/misja-pronk/isolinear/compare/v0.2.7...HEAD
+[Unreleased]: https://github.com/misja-pronk/isolinear/compare/v0.2.8...HEAD
+[0.2.8]: https://github.com/misja-pronk/isolinear/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/misja-pronk/isolinear/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/misja-pronk/isolinear/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/misja-pronk/isolinear/compare/v0.2.4...v0.2.5

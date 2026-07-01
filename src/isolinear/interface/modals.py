@@ -147,6 +147,7 @@ class HelpScreen(ModalScreen[None]):
         ("g / G", "Jump to top / bottom"),
         ("enter", "Drill scope → secrets"),
         ("/", "Filter the focused pane"),
+        ("f", "Scopes: only mine / all"),
         ("s", "Sort the focused table / click a column"),
         ("", ""),
         ("n / N", "New secret / new scope"),

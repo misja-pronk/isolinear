@@ -72,6 +72,7 @@ class MainScreen(Screen[None]):
         Binding("a", "auth", "Auth", show=False),
         Binding("s", "sort", "Sort", show=False),
         Binding("slash", "filter", "Filter"),
+        Binding("f", "toggle_scopes", "Mine/all", show=False),
         Binding("question_mark", "help", "Help"),
         Binding("escape", "cancel_filter", "Clear filter", show=False),
         # navigation — vim + arrows, fully keyboard driven
@@ -95,6 +96,8 @@ class MainScreen(Screen[None]):
         self._revealed: tuple[str, str] | None = None
         self._status_text: str = ""
         self._filter_target: str | None = None  # "scopes" | "secrets" while filtering
+        # scope list shows only scopes the user can access; f toggles to show all
+        self.show_all_scopes: bool = False
 
     # ── layout ─────────────────────────────────────────────────────────
     def compose(self) -> ComposeResult:
@@ -165,11 +168,29 @@ class MainScreen(Screen[None]):
         bc.update("   [dim]/[/]   ".join(parts))
 
     # ── scope view models + filtering ───────────────────────────────────
-    def _scope_rows(self) -> list[ScopeRow]:
+    def _scope_rows(self, *, show_all: bool = False) -> list[ScopeRow]:
+        """Rows for the scopes pane. By default only scopes the user can access
+        (effective permission is not "none") are included; `show_all` (and the
+        `f` toggle) override that to list every scope in the workspace."""
+        access = {s.scope: s.effective for s in self._sess.auth_summary()}
+        keep_all = show_all or self.show_all_scopes
         return [
             ScopeRow(name=sc.name, count=len(self._sess.secrets_for(sc.name)))
             for sc in self._sess.scopes
+            if keep_all or access.get(sc.name, "—") != "—"
         ]
+
+    def _render_scopes(self, *, keep: str | None = None, focus: bool = False) -> None:
+        """Repaint the scopes pane with the current filter, explaining an empty
+        result that the access filter (not a missing workspace) produced."""
+        rows = self._scope_rows()
+        hint: str | None = None
+        if not rows and not self.show_all_scopes and self._sess.scopes:
+            hint = (
+                "[$text-muted]No scopes you can access.\n"
+                f"Press [b $primary]f[/] to show all {len(self._sess.scopes)}.[/]"
+            )
+        self.scopes_pane.show(rows, keep=keep, focus=focus, empty_hint=hint)
 
     def _access_for(self, name: str) -> str:
         return next(
@@ -214,6 +235,17 @@ class MainScreen(Screen[None]):
     @on(Input.Submitted, "#filter-bar")
     def _filter_submitted(self) -> None:
         self._close_filter(clear=False)
+
+    def action_toggle_scopes(self) -> None:
+        """Flip between 'only scopes I can access' and 'all scopes'."""
+        if self.session is None:
+            return
+        self.show_all_scopes = not self.show_all_scopes
+        self._render_scopes(keep=self.current_scope, focus=False)
+        if self.show_all_scopes:
+            self.notify(f"Showing all {len(self._sess.scopes)} scopes.")
+        else:
+            self.notify("Showing only scopes you can access.")
 
     # ── login / onboarding ─────────────────────────────────────────────
     def action_switch_workspace(self) -> None:
@@ -280,7 +312,9 @@ class MainScreen(Screen[None]):
         except StoreError as exc:
             self._set_status(escape(str(exc)), color="$error")
             return
-        self.scopes_pane.show(self._scope_rows())
+        # during load nothing is warmed yet, so access is unknown — show every
+        # scope; the list narrows to the accessible ones once warming completes.
+        self.scopes_pane.show(self._scope_rows(show_all=True))
 
         total = len(scopes)
         for i, scope in enumerate(scopes, 1):
@@ -289,8 +323,8 @@ class MainScreen(Screen[None]):
             if scope.name == self.current_scope:
                 self._show_scope(scope.name)
 
-        # refresh rows now that counts + access are warmed
-        self.scopes_pane.show(self._scope_rows(), keep=self.current_scope, focus=False)
+        # refresh rows now that counts + access are warmed (applies the filter)
+        self._render_scopes(keep=self.current_scope, focus=False)
         self._render_status()
 
     # ── selection → render ──────────────────────────────────────────────
@@ -417,6 +451,7 @@ class MainScreen(Screen[None]):
             ("Refresh scope", self.action_refresh_scope),
             ("Refresh workspace", self.action_refresh_workspace),
             ("Authorization overview", self.action_auth),
+            ("Toggle scopes: mine / all", self.action_toggle_scopes),
             ("Switch / add workspace", self.action_switch_workspace),
             ("Help", self.action_help),
         ]
@@ -457,7 +492,7 @@ class MainScreen(Screen[None]):
         except StoreError as exc:
             self.notify(f"Create scope failed: {exc}", severity="error")
             return
-        self.scopes_pane.show(self._scope_rows(), keep=name)
+        self._render_scopes(keep=name, focus=True)
         self.notify(f"Scope “{name}” created.")
 
     def action_new_secret(self) -> None:
@@ -489,7 +524,7 @@ class MainScreen(Screen[None]):
             return
         if scope == self.current_scope:
             self._show_scope(scope)
-        self.scopes_pane.show(self._scope_rows(), keep=self.current_scope, focus=False)
+        self._render_scopes(keep=self.current_scope, focus=False)
         self.notify(f"Secret “{key}” saved.")
 
     def action_delete(self) -> None:
@@ -534,7 +569,7 @@ class MainScreen(Screen[None]):
             return
         if scope == self.current_scope:
             self._show_scope(scope)
-        self.scopes_pane.show(self._scope_rows(), keep=self.current_scope, focus=False)
+        self._render_scopes(keep=self.current_scope, focus=False)
         self.notify(f"Secret “{key}” deleted.")
 
     @work(group="mutate")
@@ -545,7 +580,7 @@ class MainScreen(Screen[None]):
             self.notify(f"Delete failed: {exc}", severity="error")
             return
         self.current_scope = self.current_secret = None
-        self.scopes_pane.show(self._scope_rows())
+        self._render_scopes()
         self.secrets_pane.clear()
         self.detail_pane.clear()
         self._render_breadcrumb()
@@ -610,7 +645,7 @@ class MainScreen(Screen[None]):
         await asyncio.to_thread(self._sess.refresh_scope, name)
         if name == self.current_scope:
             self._show_scope(name)
-        self.scopes_pane.show(self._scope_rows(), keep=self.current_scope, focus=False)
+        self._render_scopes(keep=self.current_scope, focus=False)
         self._render_status()
 
     def action_refresh_workspace(self) -> None:

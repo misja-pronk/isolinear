@@ -27,6 +27,8 @@ class WorkspaceCache:
     secrets: dict[str, list[Secret]] = field(default_factory=dict)
     acls: dict[str, list[Acl]] = field(default_factory=dict)
     values: dict[tuple[str, str], str] = field(default_factory=dict)
+    # scopes whose secrets we could list ⇒ the user holds at least READ on them
+    readable: set[str] = field(default_factory=set)
 
     scopes_loaded: bool = False
     warm_error: str = ""
@@ -70,4 +72,5 @@ class WorkspaceCache:
         self.scopes = [s for s in self.scopes if s.name != name]
         self.secrets.pop(name, None)
         self.acls.pop(name, None)
+        self.readable.discard(name)
         self.values = {k: v for k, v in self.values.items() if k[0] != name}
