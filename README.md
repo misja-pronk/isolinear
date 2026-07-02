@@ -93,7 +93,8 @@ for the fuzzy command palette.
 | `s` / `S` | Sort: next column / reverse |
 | `n` / `N` | New secret / new scope |
 | `e` · `d` | Edit secret · delete (with confirm) |
-| `u` | Undo the last secret delete |
+| `m` | Move / copy / rename secret |
+| `u` | Undo the last secret delete or move |
 | `p` | Manage scope permissions (ACLs) |
 | `space` / `enter` | Reveal / hide value (auto-hides in 30s) |
 | `c` / `C` | Copy value / copy a code reference (dbutils, Spark conf, CLI) |
@@ -102,8 +103,13 @@ for the fuzzy command palette.
 | `w` · `ctrl+p` | Switch workspace · command palette |
 | `?` · `q` | Help · quit |
 
-Run `isolinear --read-only` to browse and reveal with every mutation disabled —
-handy when you're just poking around production.
+The command palette (`ctrl+p`) holds the rest: bulk **.env import/export**, a
+**who-has-access** principal lookup, and **forget revealed values**.
+
+Run `isolinear prod` (or `--profile prod`) to connect straight to a discovered
+workspace, and add `--read-only` to browse and reveal with every mutation
+disabled — handy when you're just poking around production. Preferences (theme,
+scope toggle, audit threshold) persist in `~/.config/isolinear/settings.json`.
 
 ## Security
 

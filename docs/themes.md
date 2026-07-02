@@ -21,4 +21,4 @@ This keeps the three panes visually distinct at a glance.
 
 ## Switching themes
 
-Open the command palette with ++ctrl+p++ and choose **Change theme**, then pick a skin from the list.
+Open the command palette with ++ctrl+p++ and choose **Change theme**, then pick a skin from the list. Your choice is remembered across sessions (in `~/.config/isolinear/settings.json`).

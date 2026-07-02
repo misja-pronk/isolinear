@@ -13,7 +13,8 @@ Everything in Isolinear is keyboard-driven. Press ++question++ at any time for t
 | ++s++ / ++shift+s++ | Sort: next column / reverse direction |
 | ++n++ / ++shift+n++ | New secret / new scope |
 | ++e++ · ++d++ | Edit secret · delete (with confirm) |
-| ++u++ | Undo the last secret delete |
+| ++m++ | Move / copy / rename secret |
+| ++u++ | Undo the last secret delete or move |
 | ++p++ | Manage scope permissions (ACLs) |
 | ++space++ | Reveal / hide value (auto-hides after 30 s) |
 | ++c++ / ++shift+c++ | Copy value / copy a code reference (dbutils, Spark conf, CLI) |
@@ -29,6 +30,10 @@ Press ++slash++ to fuzzy-filter the focused pane. While the filter bar is open, 
 ## Sorting
 
 Every table sorts the same way: ++s++ advances to the next column (ascending), ++shift+s++ reverses the direction, and clicking a column header works too. A ↑ / ↓ marks the active column.
+
+## Palette-only commands
+
+Some less-frequent operations live only in the command palette (++ctrl+p++): **Import .env file into scope**, **Copy scope as .env** (keys only, or with values behind a confirm), **Who has access** (principal lookup), and **Forget revealed values**.
 
 ## Read-only mode
 

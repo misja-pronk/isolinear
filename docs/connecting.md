@@ -6,6 +6,9 @@ On launch, Isolinear opens a **workspace picker**. It gathers connection targets
 
 Pick a row and press ++enter++. Saved profiles connect instantly; a bundle target or a URL opens your browser to authenticate.
 
+!!! tip "Skip the picker entirely"
+    `isolinear prod` (or `isolinear --profile prod`) connects straight to a discovered workspace — a `~/.databrickscfg` profile or bundle target — by name. Pairs well with `--read-only` for a quick, safe look at production.
+
 !!! note "Account-level discovery was removed"
     There is no cloud + Account ID step. You connect by **profile**, **bundle**, or **URL** — nothing else.
 

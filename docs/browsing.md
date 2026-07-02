@@ -46,14 +46,32 @@ Press ++shift+c++ to copy a **code reference** instead of the value — `dbutils
 
 - **New secret** — ++n++
 - **Edit secret** — ++e++
+- **Move / copy / rename secret** — ++m++
 - **Delete secret** — ++d++
-- **Undo secret delete** — ++u++
+- **Undo secret delete or move** — ++u++
 - **New scope** — ++shift+n++
 - **Delete scope** — ++d++ on a selected scope
 
-Destructive actions show a confirmation dialog — confirming always takes a deliberate ++y++ — and a deleted secret can be restored with ++u++.
+Destructive actions show a confirmation dialog — confirming always takes a deliberate ++y++ — and a deleted (or moved-away) secret can be restored with ++u++.
+
+!!! tip "Multiline values come from a file"
+    The secret form's value field is a single masked line, so PEM keys, certificates, and other multiline material go in via the **file field**: point it at `~/certs/key.pem` and the file's content becomes the value.
+
+The ++m++ dialog covers three operations in one: pick a **target scope** and **key**, and tick *keep the original* to copy instead of move. Renaming is just a move within the same scope.
 
 ![Delete confirmation dialog](img/confirm.svg)
+
+## Bulk import and export (.env)
+
+From the command palette (++ctrl+p++):
+
+- **Import .env file into scope** — bulk-load every `KEY=VALUE` pair from a `.env` file into the selected scope. Comments, `export ` prefixes, and quoting are handled, and the confirm dialog states how many existing keys would be overwritten.
+- **Copy scope as .env (keys only)** — a redacted template (`KEY=` lines) for seeding another scope or a project's `.env.example`.
+- **Copy scope as .env (with values)** — behind a confirm; goes to the **clipboard only**, never to disk.
+
+## Who has access (principal lookup)
+
+The **Who has access** palette command is the inverse of the authorization overview: type any principal — a user, group, or service principal — and see every scope they can touch, highest privilege first. ++enter++ jumps to the scope. The go-to view for access reviews and offboarding checks.
 
 !!! note "Azure Key Vault-backed scopes are read-only"
     Secrets in Key Vault-backed scopes are managed in Azure, so create / edit / delete are disabled for them — revealing, copying, and ACLs still work.
