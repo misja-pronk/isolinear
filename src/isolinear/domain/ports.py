@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
-from .models import Workspace
+from .models import Settings, Workspace
 from .secret_store import SecretStore
 
 
@@ -45,3 +45,11 @@ class BundleStore(Protocol):
     in the working directory, if one is present."""
 
     def discover(self) -> Workspace | None: ...
+
+
+@runtime_checkable
+class SettingsStore(Protocol):
+    """Loads and saves persisted UI preferences (theme, toggles)."""
+
+    def load(self) -> Settings: ...
+    def save(self, settings: Settings) -> None: ...

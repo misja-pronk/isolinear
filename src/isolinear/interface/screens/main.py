@@ -8,6 +8,7 @@ screen's job is wiring — selections in, session calls out, results to panes.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from functools import partial
 
 from rich.markup import escape
@@ -21,7 +22,7 @@ from textual.timer import Timer
 from textual.widgets import DataTable, Footer, Input, Static
 
 from ...application import OnboardingService, WorkspaceService
-from ...domain import StoreError
+from ...domain import AuthError, Settings, StoreError
 from ..modals import (
     AuditScreen,
     AuthScreen,
@@ -103,12 +104,18 @@ class MainScreen(Screen[None]):
         onboarding: OnboardingService,
         session: WorkspaceService | None = None,
         read_only: bool = False,
+        settings: Settings | None = None,
+        save_settings: Callable[[], None] | None = None,
+        auto_connect: str | None = None,
     ) -> None:
         super().__init__()
         self._onboarding = onboarding
         self.workspaces = onboarding.available_workspaces()
         self.session = session
         self.read_only = read_only
+        self._settings = settings or Settings()
+        self._save_settings = save_settings or (lambda: None)
+        self._auto_connect_to = auto_connect
         self.current_scope: str | None = None
         self.current_secret: str | None = None
         self._revealed: tuple[str, str] | None = None
@@ -117,7 +124,7 @@ class MainScreen(Screen[None]):
         self._status_text: str = ""
         self._filter_target: str | None = None  # "scopes" | "secrets" while filtering
         # scope list shows only scopes the user can access; f toggles to show all
-        self.show_all_scopes: bool = False
+        self.show_all_scopes: bool = self._settings.show_all_scopes
 
     # ── layout ─────────────────────────────────────────────────────────
     def compose(self) -> ComposeResult:
@@ -139,6 +146,8 @@ class MainScreen(Screen[None]):
     def on_mount(self) -> None:
         if self.session is not None:
             self.load(self.session)
+        elif self._auto_connect_to:
+            self._auto_connect(self._auto_connect_to)
         else:
             self.open_login()
 
@@ -274,6 +283,8 @@ class MainScreen(Screen[None]):
         if self.session is None:
             return
         self.show_all_scopes = not self.show_all_scopes
+        self._settings.show_all_scopes = self.show_all_scopes
+        self._save_settings()
         self._render_scopes(keep=self.current_scope, focus=False)
         if self.show_all_scopes:
             self.notify(f"Showing all {len(self._sess.scopes)} scopes.")
@@ -283,6 +294,27 @@ class MainScreen(Screen[None]):
     # ── login / onboarding ─────────────────────────────────────────────
     def action_switch_workspace(self) -> None:
         self.open_login()
+
+    @work(group="connect")
+    async def _auto_connect(self, name: str) -> None:
+        """Connect straight to a discovered workspace (--profile), skipping the
+        picker; any failure lands on the login screen with the reason shown."""
+        ws = next((w for w in self.workspaces if w.name == name), None)
+        if ws is None:
+            self.notify(f"No workspace “{name}” found.", severity="error")
+            self.open_login()
+            return
+        self._set_status(f"Connecting to {escape(ws.name)}…")
+        try:
+            connection = await asyncio.to_thread(self._onboarding.connect, ws)
+        except AuthError as exc:
+            self._set_status(
+                f"Connection to {escape(ws.name)} failed — {escape(str(exc))}",
+                color="$error",
+            )
+            self.open_login()
+            return
+        self.load(connection.service)
 
     def open_login(self) -> None:
         self.app.push_screen(
@@ -821,7 +853,16 @@ class MainScreen(Screen[None]):
         """Stale-secret audit over the warmed metadata (enter jumps there)."""
         if self.session is None:
             return
-        self.app.push_screen(AuditScreen(self._sess.all_secrets()), self._on_search)
+        screen = AuditScreen(
+            self._sess.all_secrets(), threshold=self._settings.audit_threshold
+        )
+        self.app.push_screen(screen, partial(self._after_audit, screen))
+
+    def _after_audit(self, screen: AuditScreen, result: tuple[str, str] | None) -> None:
+        if screen.threshold != self._settings.audit_threshold:
+            self._settings.audit_threshold = screen.threshold
+            self._save_settings()
+        self._on_search(result)
 
     def _on_search(self, result: tuple[str, str] | None) -> None:
         if not result:

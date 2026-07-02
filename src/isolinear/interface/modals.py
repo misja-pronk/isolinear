@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from functools import partial
+from pathlib import Path
 
 from rich.markup import escape
 from rich.text import Text
@@ -79,7 +80,12 @@ class ConfirmModal(ModalScreen[bool]):
 
 
 class SecretFormModal(ModalScreen[tuple[str, str] | None]):
-    """Create or edit a secret. On edit, the key is fixed."""
+    """Create or edit a secret. On edit, the key is fixed.
+
+    The value comes from the masked input OR from a file path — the file route
+    exists because multiline values (PEM keys, certificates, JSON blobs) can't
+    be typed into a single-line input.
+    """
 
     BINDINGS = [Binding("escape", "cancel", "Cancel")]
 
@@ -107,6 +113,11 @@ class SecretFormModal(ModalScreen[tuple[str, str] | None]):
                 password=True,
                 id="f-value",
             )
+            yield Input(
+                placeholder="…or a file to read the value from (~/certs/key.pem)",
+                id="f-file",
+            )
+            yield Static("", id="form-error", classes="form-error")
             with Horizontal(classes="buttons"):
                 yield Button("Cancel", id="cancel")
                 yield Button("Save", id="ok", variant="primary")
@@ -114,16 +125,32 @@ class SecretFormModal(ModalScreen[tuple[str, str] | None]):
     def on_mount(self) -> None:
         self.query_one("#f-value" if self._edit else "#f-key", Input).focus()
 
+    def _error(self, message: str) -> None:
+        error = self.query_one("#form-error", Static)
+        error.update(f"[$error]{escape(message)}[/]")
+        error.display = True
+
     @on(Button.Pressed, "#ok")
     @on(Input.Submitted)
     def _save(self) -> None:
         key = self.query_one("#f-key", Input).value.strip()
         value = self.query_one("#f-value", Input).value
+        file_path = self.query_one("#f-file", Input).value.strip()
         if not key:
             self.query_one("#f-key", Input).focus()
             return
+        if value and file_path:
+            self._error("Provide a value or a file — not both.")
+            return
+        if file_path:
+            try:
+                value = Path(file_path).expanduser().read_text()
+            except OSError as exc:
+                self._error(f"Cannot read file: {exc}")
+                return
         if not value:
-            # saving an empty value on edit would silently wipe the secret
+            # an empty value on edit would silently wipe the secret
+            self._error("Enter a value, or a file to read it from.")
             self.query_one("#f-value", Input).focus()
             return
         self.dismiss((key, value))
@@ -298,7 +325,7 @@ class AuditScreen(ModalScreen[tuple[str, str] | None]):
     def __init__(self, secrets: list[Secret], threshold: int = STALE_AFTER_DAYS) -> None:
         super().__init__()
         self._secrets = secrets
-        self._threshold = threshold
+        self.threshold = threshold  # public: the browser persists it on close
         self._visible: list[Secret] = []
         # 0=Scope, 1=Key, 2=Updated/Age (one timestamp); default oldest first
         self._sort = SortState(3, col=2)
@@ -321,7 +348,7 @@ class AuditScreen(ModalScreen[tuple[str, str] | None]):
         self.query_one(DataTable).focus()
 
     def _sorted(self) -> list[Secret]:
-        stale = [s for s in self._secrets if s.is_stale(self._threshold)]
+        stale = [s for s in self._secrets if s.is_stale(self.threshold)]
         keys = (
             lambda s: (s.scope.lower(), s.key.lower()),
             lambda s: s.key.lower(),
@@ -347,14 +374,14 @@ class AuditScreen(ModalScreen[tuple[str, str] | None]):
         table.display = bool(self._visible)
         self.query_one("#audit-count", Static).update(
             f"[$text-muted]{len(self._visible)} of {len(self._secrets)} secrets "
-            f"not updated in [b]{self._threshold}d[/].[/]"
+            f"not updated in [b]{self.threshold}d[/].[/]"
         )
 
     def action_threshold(self) -> None:
         """Cycle the staleness window: 30 → 90 → 180 → 365 days."""
         thresholds = self.THRESHOLDS
-        i = thresholds.index(self._threshold) if self._threshold in thresholds else 0
-        self._threshold = thresholds[(i + 1) % len(thresholds)]
+        i = thresholds.index(self.threshold) if self.threshold in thresholds else 0
+        self.threshold = thresholds[(i + 1) % len(thresholds)]
         self._populate()
 
     def action_copy_report(self) -> None:

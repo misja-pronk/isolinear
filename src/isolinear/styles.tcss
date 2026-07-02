@@ -253,6 +253,11 @@ ModalScreen {
     background: transparent;
     border: round $border 40%;
 }
+#dialog .form-error {
+    display: none;
+    color: $error;
+    margin-top: 1;
+}
 #dialog .buttons {
     align-horizontal: right;
     height: auto;

@@ -101,6 +101,15 @@ class Acl:
 
 
 @dataclass
+class Settings:
+    """Persisted UI preferences — display choices only, never secret material."""
+
+    theme: str = "isolinear"
+    show_all_scopes: bool = False
+    audit_threshold: int = STALE_AFTER_DAYS
+
+
+@dataclass
 class Identity:
     """Who we are authenticated as in a workspace."""
 

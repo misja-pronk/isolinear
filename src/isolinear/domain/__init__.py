@@ -16,10 +16,17 @@ from .models import (
     Identity,
     Scope,
     Secret,
+    Settings,
     Workspace,
 )
 from .permissions import AuthSummary, authorization_summary, perm_rank
-from .ports import BundleStore, Connected, ProfileStore, WorkspaceConnector
+from .ports import (
+    BundleStore,
+    Connected,
+    ProfileStore,
+    SettingsStore,
+    WorkspaceConnector,
+)
 from .secret_store import SecretStore
 
 __all__ = [
@@ -37,6 +44,8 @@ __all__ = [
     "Scope",
     "Secret",
     "SecretStore",
+    "Settings",
+    "SettingsStore",
     "StoreError",
     "Workspace",
     "WorkspaceConnector",

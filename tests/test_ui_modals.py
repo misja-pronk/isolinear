@@ -102,6 +102,60 @@ async def test_edit_with_empty_value_does_not_submit():
         assert not isinstance(app.screen, SecretFormModal)
 
 
+async def test_secret_value_read_from_file(tmp_path):
+    """Multiline values (PEM keys etc.) come in via the file field."""
+    pem = "-----BEGIN KEY-----\nline1\nline2\n-----END KEY-----\n"
+    value_file = tmp_path / "key.pem"
+    value_file.write_text(pem)
+    app, session = _app()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        await pilot.press("j", "n")  # new secret in prod
+        await pilot.pause()
+        app.screen.query_one("#f-key", Input).value = "tls-key"
+        app.screen.query_one("#f-file", Input).value = str(value_file)
+        await pilot.press("enter")
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert session.reveal("prod", "tls-key") == pem
+
+
+async def test_secret_form_rejects_value_and_file_together(tmp_path):
+    value_file = tmp_path / "v.txt"
+    value_file.write_text("x")
+    app, _ = _app()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        app.push_screen(SecretFormModal(scope="prod"))
+        await pilot.pause()
+        app.screen.query_one("#f-key", Input).value = "k"
+        app.screen.query_one("#f-value", Input).value = "typed"
+        app.screen.query_one("#f-file", Input).value = str(value_file)
+        await pilot.press("enter")
+        await pilot.pause()
+        assert isinstance(app.screen, SecretFormModal)  # not submitted
+        assert app.screen.query_one("#form-error").display
+        await pilot.press("escape")
+
+
+async def test_secret_form_reports_unreadable_file():
+    app, _ = _app()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        app.push_screen(SecretFormModal(scope="prod"))
+        await pilot.pause()
+        app.screen.query_one("#f-key", Input).value = "k"
+        app.screen.query_one("#f-file", Input).value = "/nonexistent/nope.pem"
+        await pilot.press("enter")
+        await pilot.pause()
+        assert isinstance(app.screen, SecretFormModal)
+        assert app.screen.query_one("#form-error").display
+        await pilot.press("escape")
+
+
 async def test_q_inside_a_dialog_does_not_quit_the_app():
     """`q` quits from the browse screen only — from a dialog (focus on a
     button, so no Input swallows it) it must not bubble into an app quit."""

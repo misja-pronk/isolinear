@@ -4,7 +4,14 @@ from typing import cast
 
 from textual.widgets import DataTable
 
-from fakes import FakeSecretStore, seeded_store, stub_onboarding
+from fakes import (
+    ConnectingStubConnector,
+    FakeSecretStore,
+    StubBundle,
+    StubProfiles,
+    seeded_store,
+    stub_onboarding,
+)
 from isolinear.app import IsolinearApp
 from isolinear.application import WorkspaceService
 from isolinear.interface.modals import ConfirmModal
@@ -348,6 +355,33 @@ async def test_forget_values_purges_the_cache():
         await pilot.pause()
         assert session.cached_value("prod", "api-key") is None
         assert main._revealed is None
+
+
+async def test_profile_flag_connects_directly():
+    from isolinear.application import OnboardingService
+    from isolinear.domain import Workspace
+
+    onboarding = OnboardingService(
+        ConnectingStubConnector(),
+        StubProfiles([Workspace(profile="prod", host="https://prod.example.com")]),
+        StubBundle(),
+    )
+    app = IsolinearApp(onboarding=onboarding, profile="prod")
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        main = cast(MainScreen, app.screen)
+        assert isinstance(main, MainScreen)  # no login screen in the way
+        assert main.session is not None
+        assert main.current_scope == "kv"  # warmed and browsing
+
+
+async def test_unknown_profile_falls_back_to_login():
+    app = IsolinearApp(onboarding=stub_onboarding(), profile="nope")
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert isinstance(app.screen, LoginScreen)
 
 
 async def test_audit_lists_stale_secrets_and_jumps():
