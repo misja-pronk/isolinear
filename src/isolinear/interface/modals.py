@@ -15,8 +15,16 @@ from textual.screen import ModalScreen
 from textual.widgets import Button, DataTable, Input, Select, Static
 
 from ..application import WorkspaceService
-from ..domain import Acl, AuthSummary, Identity, StoreError, perm_rank
-from .widgets import fuzzy_match, perm_cell
+from ..domain import (
+    STALE_AFTER_DAYS,
+    Acl,
+    AuthSummary,
+    Identity,
+    Secret,
+    StoreError,
+    perm_rank,
+)
+from .widgets import fuzzy_match, perm_cell, relative_age
 
 PERMISSIONS = ["READ", "WRITE", "MANAGE"]
 
@@ -269,6 +277,129 @@ class SnippetModal(ModalScreen[str | None]):
         self.dismiss(None)
 
 
+class AuditScreen(ModalScreen[tuple[str, str] | None]):
+    """Stale-secret audit: every secret not updated within the threshold.
+
+    Pure view over the warmed metadata — no values are read. Enter dismisses
+    with the chosen (scope, key) so the browser can jump to it; `c` copies the
+    table as markdown for a rotation ticket.
+    """
+
+    THRESHOLDS = (30, 90, 180, 365)
+
+    BINDINGS = [
+        Binding("escape,q", "close", "Close"),
+        Binding("t", "threshold", "Threshold"),
+        Binding("c", "copy_report", "Copy report"),
+        Binding("s", "sort", "Sort", show=False),
+        Binding("S", "sort_reverse", "Sort reverse", show=False),
+    ]
+
+    def __init__(self, secrets: list[Secret], threshold: int = STALE_AFTER_DAYS) -> None:
+        super().__init__()
+        self._secrets = secrets
+        self._threshold = threshold
+        self._visible: list[Secret] = []
+        self._sort_col = 2  # 0=Scope, 1=Key, 2=Updated/Age (one timestamp)
+        self._sort_rev = False  # oldest first
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="dialog"):
+            yield Static("Stale secrets", classes="dialog-title")
+            yield Static("", id="audit-count")
+            table: DataTable = DataTable(id="audit-table", zebra_stripes=False)
+            table.cursor_type = "row"
+            yield table
+            yield Static(
+                "[$text-muted]t threshold · enter open · c copy report "
+                "· s/S sort · esc close[/]",
+                classes="dialog-hint",
+            )
+
+    def on_mount(self) -> None:
+        self._populate()
+        self.query_one(DataTable).focus()
+
+    def _sorted(self) -> list[Secret]:
+        stale = [s for s in self._secrets if s.is_stale(self._threshold)]
+        keys = (
+            lambda s: (s.scope.lower(), s.key.lower()),
+            lambda s: s.key.lower(),
+            lambda s: s.last_updated_ms or 0,
+        )
+        return sorted(stale, key=keys[self._sort_col], reverse=self._sort_rev)
+
+    def _populate(self) -> None:
+        table = self.query_one(DataTable)
+        table.clear(columns=True)
+        arrow = "↓" if self._sort_rev else "↑"
+        cols = ("Scope", "Key", "Updated", "Age")
+        table.add_columns(
+            *(f"{c} {arrow}" if i == self._sort_col else c for i, c in enumerate(cols))
+        )
+        scope_color = self.app.theme_variables.get("scopes-color", "")
+        warn = self.app.theme_variables.get("warning", "")
+        self._visible = self._sorted()
+        for s in self._visible:
+            age, _ = relative_age(s.last_updated_ms)
+            table.add_row(
+                Text(s.scope, style=scope_color),
+                s.key,
+                Text(s.last_updated, style="grey62"),
+                Text(age, style=warn),
+            )
+        table.display = bool(self._visible)
+        self.query_one("#audit-count", Static).update(
+            f"[$text-muted]{len(self._visible)} of {len(self._secrets)} secrets "
+            f"not updated in [b]{self._threshold}d[/].[/]"
+        )
+
+    def action_threshold(self) -> None:
+        """Cycle the staleness window: 30 → 90 → 180 → 365 days."""
+        thresholds = self.THRESHOLDS
+        i = thresholds.index(self._threshold) if self._threshold in thresholds else 0
+        self._threshold = thresholds[(i + 1) % len(thresholds)]
+        self._populate()
+
+    def action_copy_report(self) -> None:
+        if not self._visible:
+            self.notify("Nothing to copy.")
+            return
+        lines = ["| Scope | Key | Updated | Age |", "|---|---|---|---|"]
+        for s in self._visible:
+            age, _ = relative_age(s.last_updated_ms)
+            lines.append(f"| {s.scope} | {s.key} | {s.last_updated} | {age} |")
+        self.app.copy_to_clipboard("\n".join(lines))
+        self.notify(f"Copied {len(self._visible)} rows as markdown.")
+
+    def action_sort(self) -> None:
+        self._sort_col = (self._sort_col + 1) % 3
+        self._sort_rev = False
+        self._populate()
+
+    def action_sort_reverse(self) -> None:
+        self._sort_rev = not self._sort_rev
+        self._populate()
+
+    @on(DataTable.HeaderSelected, "#audit-table")
+    def _sort_by_header(self, event: DataTable.HeaderSelected) -> None:
+        col = min(event.column_index, 2)  # Updated + Age share the timestamp
+        if col == self._sort_col:
+            self._sort_rev = not self._sort_rev
+        else:
+            self._sort_col, self._sort_rev = col, False
+        self._populate()
+
+    @on(DataTable.RowSelected, "#audit-table")
+    def _open(self, event: DataTable.RowSelected) -> None:
+        if 0 <= event.cursor_row < len(self._visible):
+            chosen = self._visible[event.cursor_row]
+            self.dismiss((chosen.scope, chosen.key))
+
+    def action_close(self) -> None:
+        self.dismiss(None)
+
+
 class HelpScreen(ModalScreen[None]):
     BINDINGS = [Binding("escape,q,?", "close", "Close")]
 
@@ -294,6 +425,7 @@ class HelpScreen(ModalScreen[None]):
         ("", ""),
         ("r / R", "Refresh scope / workspace"),
         ("a", "Authorization overview"),
+        ("A", "Audit: stale secrets"),
         ("w", "Switch / add workspace (login)"),
         ("ctrl+p", "Command palette"),
         ("? / q", "Help / quit"),

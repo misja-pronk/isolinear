@@ -98,7 +98,7 @@ for the fuzzy command palette.
 | `space` / `enter` | Reveal / hide value (auto-hides in 30s) |
 | `c` / `C` | Copy value / copy a code reference (dbutils, Spark conf, CLI) |
 | `r` / `R` | Refresh scope / workspace |
-| `a` | Authorization overview |
+| `a` / `A` | Authorization overview / stale-secret audit |
 | `w` · `ctrl+p` | Switch workspace · command palette |
 | `?` · `q` | Help · quit |
 

@@ -276,12 +276,14 @@ class SecretsPane(Vertical):
         )
         if self._filter:
             chip.update(filter_chip(self._filter, len(self._visible), len(self._secrets)))
+        warn = self.app.theme_variables.get("warning", "")
         for s in self._visible:
             age, _ = relative_age(s.last_updated_ms)
+            # amber age = overdue for rotation (see the audit screen, A)
             table.add_row(
                 s.key,
                 Text(s.last_updated, style="grey62"),
-                Text(age, style="grey50"),
+                Text(age, style=warn if s.is_stale() else "grey50"),
                 key=s.key,
             )
         table.display = bool(self._visible)

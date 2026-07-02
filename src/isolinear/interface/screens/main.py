@@ -23,6 +23,7 @@ from textual.widgets import DataTable, Footer, Input, Static
 from ...application import OnboardingService, WorkspaceService
 from ...domain import StoreError
 from ..modals import (
+    AuditScreen,
     AuthScreen,
     ConfirmModal,
     HelpScreen,
@@ -76,6 +77,7 @@ class MainScreen(Screen[None]):
         Binding("r", "refresh_scope", "Refresh", show=False),
         Binding("R", "refresh_workspace", "Refresh all", show=False),
         Binding("a", "auth", "Auth", show=False),
+        Binding("A", "audit", "Audit", show=False),
         Binding("s", "sort", "Sort", show=False),
         Binding("S", "sort_reverse", "Sort reverse", show=False),
         Binding("slash", "filter", "Filter"),
@@ -546,6 +548,7 @@ class MainScreen(Screen[None]):
             ("Refresh scope", self.action_refresh_scope),
             ("Refresh workspace", self.action_refresh_workspace),
             ("Authorization overview", self.action_auth),
+            ("Audit: stale secrets", self.action_audit),
             ("Toggle scopes: mine / all", self.action_toggle_scopes),
             ("Switch / add workspace", self.action_switch_workspace),
             ("Help", self.action_help),
@@ -807,12 +810,18 @@ class MainScreen(Screen[None]):
         self._hide_value()
         self.notify("Forgot all revealed values.")
 
-    # ── global search ───────────────────────────────────────────────────
+    # ── global search + audit ───────────────────────────────────────────
     def action_search(self) -> None:
         if self.session is None:
             return
         entries = [(s.scope, s.key) for s in self._sess.all_secrets()]
         self.app.push_screen(SearchModal(entries), self._on_search)
+
+    def action_audit(self) -> None:
+        """Stale-secret audit over the warmed metadata (enter jumps there)."""
+        if self.session is None:
+            return
+        self.app.push_screen(AuditScreen(self._sess.all_secrets()), self._on_search)
 
     def _on_search(self, result: tuple[str, str] | None) -> None:
         if not result:

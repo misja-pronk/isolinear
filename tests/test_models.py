@@ -33,6 +33,21 @@ def test_secret_last_updated_formats_utc():
     assert Secret("s", "k", 1_718_000_000_000).last_updated.startswith("2024-06-10")
 
 
+def test_secret_staleness():
+    import time
+
+    now_ms = int(time.time() * 1000)
+    day_ms = 86_400_000
+    assert Secret("s", "k", None).age_days is None
+    assert not Secret("s", "k", None).is_stale()  # unknown age is never flagged
+    fresh = Secret("s", "k", now_ms - 5 * day_ms)
+    old = Secret("s", "k", now_ms - 100 * day_ms)
+    assert not fresh.is_stale()
+    assert old.is_stale()  # default 90d
+    assert not old.is_stale(days=180)
+    assert fresh.is_stale(days=1)
+
+
 def test_workspace_label_strips_scheme():
     ws = Workspace("prod", "https://x.cloud.databricks.com/")
     assert ws.label == "prod  ·  x.cloud.databricks.com"
