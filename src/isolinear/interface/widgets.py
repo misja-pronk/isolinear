@@ -18,6 +18,7 @@ from textual.message import Message
 from textual.widgets import DataTable, Static
 
 from ..domain import Acl, Scope, Secret, perm_rank
+from .sorting import SortState
 
 
 def fuzzy_match(query: str, text: str) -> bool:
@@ -71,6 +72,14 @@ def filter_chip(query: str, shown: int, total: int) -> str:
     return f"[$text-muted]⌕[/] [b]{escape(query)}[/] [$text-muted]{shown}/{total}[/]"
 
 
+# ACL tables sort by principal or by privilege (then principal) — shared by the
+# detail pane and the permissions editor.
+ACL_SORT_KEYS = (
+    lambda a: a.principal.lower(),
+    lambda a: (perm_rank(a.permission), a.principal.lower()),
+)
+
+
 @dataclass
 class ScopeRow:
     """View model for one scope row."""
@@ -93,8 +102,7 @@ class ScopesPane(Vertical):
         self._visible: list[ScopeRow] = []
         self._filter = ""
         self._empty_hint: str | None = None
-        self._sort_col = 0  # 0=Scope, 1=Secrets
-        self._sort_rev = False
+        self._sort = SortState(2)  # 0=Scope, 1=Secrets
 
     def compose(self) -> ComposeResult:
         yield Static("", id="scopes-filter", classes="filter-chip")
@@ -133,15 +141,10 @@ class ScopesPane(Vertical):
         chip.display = bool(self._filter)
         table = self.query_one(DataTable)
         table.clear(columns=True)
-        arrow = "↓" if self._sort_rev else "↑"
-        table.add_columns(
-            *(
-                f"{name} {arrow}" if i == self._sort_col else name
-                for i, name in enumerate(("Scope", "Secrets"))
-            )
-        )
-        self._visible = self._sorted(
-            [r for r in self._rows if fuzzy_match(self._filter, r.name)]
+        table.add_columns(*self._sort.labels(("Scope", "Secrets")))
+        self._visible = self._sort.apply(
+            [r for r in self._rows if fuzzy_match(self._filter, r.name)],
+            (lambda r: r.name.lower(), lambda r: r.count),
         )
         if self._filter:
             chip.update(filter_chip(self._filter, len(self._visible), len(self._rows)))
@@ -188,34 +191,20 @@ class ScopesPane(Vertical):
     # ── sorting: click a column header, or cycle with the `s` key ──────
     @on(DataTable.HeaderSelected, "#scopes-table")
     def _header_clicked(self, event: DataTable.HeaderSelected) -> None:
-        self._set_sort(event.column_index)
+        self._sort.click(event.column_index)
+        self._rebuild(focus=False, keep=self._cursor_scope())
 
     def cycle_sort(self) -> None:
-        """Keyboard sort: advance to the next column, ascending."""
-        self._sort_col = (self._sort_col + 1) % 2
-        self._sort_rev = False
+        self._sort.cycle()
         self._rebuild(focus=False, keep=self._cursor_scope())
 
     def flip_sort(self) -> None:
-        """Reverse the current sort direction."""
-        self._sort_rev = not self._sort_rev
-        self._rebuild(focus=False, keep=self._cursor_scope())
-
-    def _set_sort(self, col: int) -> None:
-        if col == self._sort_col:
-            self._sort_rev = not self._sort_rev
-        else:
-            self._sort_col, self._sort_rev = col, False
+        self._sort.flip()
         self._rebuild(focus=False, keep=self._cursor_scope())
 
     def _cursor_scope(self) -> str | None:
         row = self.query_one(DataTable).cursor_row
         return self._visible[row].name if 0 <= row < len(self._visible) else None
-
-    def _sorted(self, rows: list[ScopeRow]) -> list[ScopeRow]:
-        if self._sort_col == 0:  # Scope — alphabetical
-            return sorted(rows, key=lambda r: r.name.lower(), reverse=self._sort_rev)
-        return sorted(rows, key=lambda r: r.count, reverse=self._sort_rev)  # Secrets
 
 
 class SecretsPane(Vertical):
@@ -233,8 +222,7 @@ class SecretsPane(Vertical):
         self._visible: list[Secret] = []
         self._filter = ""
         self._keyvault = False
-        self._sort_col = 0  # column index: 0=Key, 1=Updated, 2=Age
-        self._sort_rev = False
+        self._sort = SortState(3)  # 0=Key, 1=Updated, 2=Age (1+2 share the timestamp)
 
     def compose(self) -> ComposeResult:
         yield Static("", id="secrets-filter", classes="filter-chip")
@@ -264,15 +252,11 @@ class SecretsPane(Vertical):
         chip.display = bool(self._filter)
         table = self.query_one(DataTable)
         table.clear(columns=True)
-        arrow = "↓" if self._sort_rev else "↑"
-        table.add_columns(
-            *(
-                f"{name} {arrow}" if i == self._sort_col else name
-                for i, name in enumerate(("Key", "Updated", "Age"))
-            )
-        )
-        self._visible = self._sorted(
-            [s for s in self._secrets if fuzzy_match(self._filter, s.key)]
+        table.add_columns(*self._sort.labels(("Key", "Updated", "Age")))
+        by_ts = lambda s: s.last_updated_ms or 0  # noqa: E731
+        self._visible = self._sort.apply(
+            [s for s in self._secrets if fuzzy_match(self._filter, s.key)],
+            (lambda s: s.key.lower(), by_ts, by_ts),
         )
         if self._filter:
             chip.update(filter_chip(self._filter, len(self._visible), len(self._secrets)))
@@ -334,37 +318,20 @@ class SecretsPane(Vertical):
     # ── sorting: click a column header, or cycle with the `s` key ──────
     @on(DataTable.HeaderSelected, "#secrets-table")
     def _header_clicked(self, event: DataTable.HeaderSelected) -> None:
-        self._set_sort(event.column_index)
+        self._sort.click(event.column_index)
+        self._rebuild(keep=self._cursor_key())
 
     def cycle_sort(self) -> None:
-        """Keyboard sort: advance to the next column, ascending."""
-        self._sort_col = (self._sort_col + 1) % 3
-        self._sort_rev = False
+        self._sort.cycle()
         self._rebuild(keep=self._cursor_key())
 
     def flip_sort(self) -> None:
-        """Reverse the current sort direction."""
-        self._sort_rev = not self._sort_rev
-        self._rebuild(keep=self._cursor_key())
-
-    def _set_sort(self, col: int) -> None:
-        if col == self._sort_col:
-            self._sort_rev = not self._sort_rev
-        else:
-            self._sort_col, self._sort_rev = col, False
+        self._sort.flip()
         self._rebuild(keep=self._cursor_key())
 
     def _cursor_key(self) -> str | None:
         row = self.query_one(DataTable).cursor_row
         return self._visible[row].key if 0 <= row < len(self._visible) else None
-
-    def _sorted(self, secrets: list[Secret]) -> list[Secret]:
-        if self._sort_col == 0:  # Key — alphabetical
-            return sorted(secrets, key=lambda s: s.key.lower(), reverse=self._sort_rev)
-        # Updated / Age — by timestamp
-        return sorted(
-            secrets, key=lambda s: s.last_updated_ms or 0, reverse=self._sort_rev
-        )
 
 
 class DetailPane(Vertical):
@@ -373,8 +340,8 @@ class DetailPane(Vertical):
     def __init__(self) -> None:
         super().__init__(id="detail-pane", classes="pane")
         self._acls: list[Acl] = []
-        self._sort_col = 1  # 0=Principal, 1=Access
-        self._sort_rev = True  # Access, highest privilege first
+        # 0=Principal, 1=Access; default: highest privilege first
+        self._sort = SortState(2, col=1, rev=True)
 
     def compose(self) -> ComposeResult:
         # the scroll container is the pane's focus target, so a long revealed
@@ -488,41 +455,19 @@ class DetailPane(Vertical):
         table.display = bool(self._acls)
         if not self._acls:
             return
-        arrow = "↓" if self._sort_rev else "↑"
-        cols = ("Principal", "Access")
-        table.add_columns(
-            *(f"{c} {arrow}" if i == self._sort_col else c for i, c in enumerate(cols))
-        )
-        for a in self._sorted_acls():
+        table.add_columns(*self._sort.labels(("Principal", "Access")))
+        for a in self._sort.apply(self._acls, ACL_SORT_KEYS):
             table.add_row(a.principal, perm_cell(self.app, a.permission), key=a.principal)
 
-    def _sorted_acls(self) -> list[Acl]:
-        if self._sort_col == 0:  # Principal — alphabetical
-            return sorted(
-                self._acls, key=lambda a: a.principal.lower(), reverse=self._sort_rev
-            )
-        # Access — by privilege, then principal
-        return sorted(
-            self._acls,
-            key=lambda a: (perm_rank(a.permission), a.principal.lower()),
-            reverse=self._sort_rev,
-        )
-
     def cycle_sort(self) -> None:
-        """Keyboard sort: advance to the next column, ascending."""
-        self._sort_col = (self._sort_col + 1) % 2
-        self._sort_rev = False
+        self._sort.cycle()
         self._populate_acls()
 
     def flip_sort(self) -> None:
-        """Reverse the current sort direction."""
-        self._sort_rev = not self._sort_rev
+        self._sort.flip()
         self._populate_acls()
 
     @on(DataTable.HeaderSelected, "#acl-table")
     def _sort_by_header(self, event: DataTable.HeaderSelected) -> None:
-        if event.column_index == self._sort_col:
-            self._sort_rev = not self._sort_rev
-        else:
-            self._sort_col, self._sort_rev = event.column_index, False
+        self._sort.click(event.column_index)
         self._populate_acls()

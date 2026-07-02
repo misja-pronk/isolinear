@@ -28,6 +28,7 @@ from textual.widgets import Button, DataTable, Input, Static
 from ...application import Connection, OnboardingService
 from ...domain import SOURCE_PROFILE, AuthError, Workspace
 from ..modals import key_label
+from ..sorting import SortState
 
 
 @dataclass
@@ -99,8 +100,7 @@ class LoginScreen(Screen[ConnectResult | None]):
         self._workspaces = workspaces
         self._onboarding = onboarding
         self._can_cancel = can_cancel
-        self._sort_col: int | None = None  # None = natural order (default first)
-        self._sort_rev = False
+        self._sort = SortState(3, col=None)  # natural order (default first) at start
         self._order: list[int] = []  # display row -> index into _workspaces
 
     def compose(self) -> ComposeResult:
@@ -143,11 +143,7 @@ class LoginScreen(Screen[ConnectResult | None]):
         table = self.query_one("#ws-table", DataTable)
         keep = self._cursor_index()  # preserve the selection across a re-sort
         table.clear(columns=True)
-        arrow = "↓" if self._sort_rev else "↑"
-        cols = ("Workspace", "Host", "Source")
-        table.add_columns(
-            *(f"{c} {arrow}" if i == self._sort_col else c for i, c in enumerate(cols))
-        )
+        table.add_columns(*self._sort.labels(("Workspace", "Host", "Source")))
         self._order = self._sorted_indices()
         cursor = 0
         for row, i in enumerate(self._order):
@@ -159,18 +155,12 @@ class LoginScreen(Screen[ConnectResult | None]):
 
     def _sorted_indices(self) -> list[int]:
         """Row order for the current sort; natural order (default first) if unsorted."""
-        idx = list(range(len(self._workspaces)))
-        if self._sort_col is None:
-            return idx
         fields = (
-            lambda w: w.name.lower(),
-            lambda w: w.host_label.lower(),
-            lambda w: w.source_label.lower(),
+            lambda i: self._workspaces[i].name.lower(),
+            lambda i: self._workspaces[i].host_label.lower(),
+            lambda i: self._workspaces[i].source_label.lower(),
         )
-        field = fields[self._sort_col]
-        return sorted(
-            idx, key=lambda i: field(self._workspaces[i]), reverse=self._sort_rev
-        )
+        return self._sort.apply(range(len(self._workspaces)), fields)
 
     def _cursor_index(self) -> int | None:
         """Original index of the currently-selected workspace (survives a re-sort)."""
@@ -180,23 +170,16 @@ class LoginScreen(Screen[ConnectResult | None]):
         return self._order[row] if 0 <= row < len(self._order) else None
 
     def action_sort(self) -> None:
-        """Advance to the next column, ascending (from natural order to col 0)."""
-        self._sort_col = 0 if self._sort_col is None else (self._sort_col + 1) % 3
-        self._sort_rev = False
+        self._sort.cycle()
         self._populate()
 
     def action_sort_reverse(self) -> None:
-        if self._sort_col is None:
-            self._sort_col = 0
-        self._sort_rev = not self._sort_rev
+        self._sort.flip()
         self._populate()
 
     @on(DataTable.HeaderSelected, "#ws-table")
     def _sort_by_header(self, event: DataTable.HeaderSelected) -> None:
-        if event.column_index == self._sort_col:
-            self._sort_rev = not self._sort_rev
-        else:
-            self._sort_col, self._sort_rev = event.column_index, False
+        self._sort.click(event.column_index)
         self._populate()
 
     def _status(self, text: str) -> None:

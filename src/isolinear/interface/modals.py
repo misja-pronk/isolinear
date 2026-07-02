@@ -17,14 +17,14 @@ from textual.widgets import Button, DataTable, Input, Select, Static
 from ..application import WorkspaceService
 from ..domain import (
     STALE_AFTER_DAYS,
-    Acl,
     AuthSummary,
     Identity,
     Secret,
     StoreError,
     perm_rank,
 )
-from .widgets import fuzzy_match, perm_cell, relative_age
+from .sorting import SortState
+from .widgets import ACL_SORT_KEYS, fuzzy_match, perm_cell, relative_age
 
 PERMISSIONS = ["READ", "WRITE", "MANAGE"]
 
@@ -300,8 +300,8 @@ class AuditScreen(ModalScreen[tuple[str, str] | None]):
         self._secrets = secrets
         self._threshold = threshold
         self._visible: list[Secret] = []
-        self._sort_col = 2  # 0=Scope, 1=Key, 2=Updated/Age (one timestamp)
-        self._sort_rev = False  # oldest first
+        # 0=Scope, 1=Key, 2=Updated/Age (one timestamp); default oldest first
+        self._sort = SortState(3, col=2)
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
@@ -327,16 +327,12 @@ class AuditScreen(ModalScreen[tuple[str, str] | None]):
             lambda s: s.key.lower(),
             lambda s: s.last_updated_ms or 0,
         )
-        return sorted(stale, key=keys[self._sort_col], reverse=self._sort_rev)
+        return self._sort.apply(stale, keys)
 
     def _populate(self) -> None:
         table = self.query_one(DataTable)
         table.clear(columns=True)
-        arrow = "↓" if self._sort_rev else "↑"
-        cols = ("Scope", "Key", "Updated", "Age")
-        table.add_columns(
-            *(f"{c} {arrow}" if i == self._sort_col else c for i, c in enumerate(cols))
-        )
+        table.add_columns(*self._sort.labels(("Scope", "Key", "Updated", "Age")))
         scope_color = self.app.theme_variables.get("scopes-color", "")
         warn = self.app.theme_variables.get("warning", "")
         self._visible = self._sorted()
@@ -373,21 +369,16 @@ class AuditScreen(ModalScreen[tuple[str, str] | None]):
         self.notify(f"Copied {len(self._visible)} rows as markdown.")
 
     def action_sort(self) -> None:
-        self._sort_col = (self._sort_col + 1) % 3
-        self._sort_rev = False
+        self._sort.cycle()
         self._populate()
 
     def action_sort_reverse(self) -> None:
-        self._sort_rev = not self._sort_rev
+        self._sort.flip()
         self._populate()
 
     @on(DataTable.HeaderSelected, "#audit-table")
     def _sort_by_header(self, event: DataTable.HeaderSelected) -> None:
-        col = min(event.column_index, 2)  # Updated + Age share the timestamp
-        if col == self._sort_col:
-            self._sort_rev = not self._sort_rev
-        else:
-            self._sort_col, self._sort_rev = col, False
+        self._sort.click(event.column_index)  # Updated + Age share the timestamp
         self._populate()
 
     @on(DataTable.RowSelected, "#audit-table")
@@ -456,8 +447,8 @@ class AuthScreen(ModalScreen[None]):
         super().__init__()
         self._identity = identity
         self._summaries = summaries
-        self._sort_col = 1  # 0=Scope, 1=Your access, 2=Principals
-        self._sort_rev = True  # highest access first
+        # 0=Scope, 1=Your access, 2=Principals; default: highest access first
+        self._sort = SortState(3, col=1, rev=True)
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog"):
@@ -481,42 +472,31 @@ class AuthScreen(ModalScreen[None]):
     def _populate(self) -> None:
         table = self.query_one(DataTable)
         table.clear(columns=True)
-        arrow = "↓" if self._sort_rev else "↑"
-        cols = ("Scope", "Your access", "Principals")
-        table.add_columns(
-            *(f"{c} {arrow}" if i == self._sort_col else c for i, c in enumerate(cols))
-        )
+        table.add_columns(*self._sort.labels(("Scope", "Your access", "Principals")))
         scope_color = self.app.theme_variables.get("scopes-color", "")
-        for s in self._sorted():
+        keys = (
+            lambda s: s.scope.lower(),
+            lambda s: (perm_rank(s.effective), s.scope.lower()),
+            lambda s: (s.acl_count, s.scope.lower()),
+        )
+        for s in self._sort.apply(self._summaries, keys):
             table.add_row(
                 Text(s.scope, style=scope_color),
                 perm_cell(self.app, s.effective),
                 str(s.acl_count),
             )
 
-    def _sorted(self) -> list[AuthSummary]:
-        keys = (
-            lambda s: s.scope.lower(),
-            lambda s: (perm_rank(s.effective), s.scope.lower()),
-            lambda s: (s.acl_count, s.scope.lower()),
-        )
-        return sorted(self._summaries, key=keys[self._sort_col], reverse=self._sort_rev)
-
     def action_sort(self) -> None:
-        self._sort_col = (self._sort_col + 1) % 3
-        self._sort_rev = False
+        self._sort.cycle()
         self._populate()
 
     def action_sort_reverse(self) -> None:
-        self._sort_rev = not self._sort_rev
+        self._sort.flip()
         self._populate()
 
     @on(DataTable.HeaderSelected, "#auth-table")
     def _sort_by_header(self, event: DataTable.HeaderSelected) -> None:
-        if event.column_index == self._sort_col:
-            self._sort_rev = not self._sort_rev
-        else:
-            self._sort_col, self._sort_rev = event.column_index, False
+        self._sort.click(event.column_index)
         self._populate()
 
     def action_close(self) -> None:
@@ -606,8 +586,8 @@ class PermissionsScreen(ModalScreen[None]):
         self._scope = scope
         self._read_only = read_only
         self._principals: list[str] = []
-        self._sort_col = 1  # 0=Principal, 1=Access
-        self._sort_rev = True  # highest access first
+        # 0=Principal, 1=Access; default: highest access first
+        self._sort = SortState(2, col=1, rev=True)
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dialog", classes="scope"):
@@ -635,14 +615,11 @@ class PermissionsScreen(ModalScreen[None]):
         table = self.query_one(DataTable)
         keep = self._selected()  # preserve the selection across a re-sort / refresh
         table.clear(columns=True)
-        arrow = "↓" if self._sort_rev else "↑"
-        cols = ("Principal", "Access")
-        table.add_columns(
-            *(f"{c} {arrow}" if i == self._sort_col else c for i, c in enumerate(cols))
-        )
+        table.add_columns(*self._sort.labels(("Principal", "Access")))
         self._principals = []
         cursor = 0
-        for acl in self._sorted():
+        acls = list(self._session.acls_for(self._scope))
+        for acl in self._sort.apply(acls, ACL_SORT_KEYS):
             table.add_row(
                 acl.principal, perm_cell(self.app, acl.permission), key=acl.principal
             )
@@ -652,16 +629,6 @@ class PermissionsScreen(ModalScreen[None]):
         if self._principals:
             table.move_cursor(row=cursor)
 
-    def _sorted(self) -> list[Acl]:
-        acls = list(self._session.acls_for(self._scope))
-        if self._sort_col == 0:  # Principal — alphabetical
-            return sorted(acls, key=lambda a: a.principal.lower(), reverse=self._sort_rev)
-        return sorted(  # Access — by privilege, then principal
-            acls,
-            key=lambda a: (perm_rank(a.permission), a.principal.lower()),
-            reverse=self._sort_rev,
-        )
-
     def _selected(self) -> str | None:
         table = self.query_one(DataTable)
         row = table.cursor_row
@@ -670,20 +637,16 @@ class PermissionsScreen(ModalScreen[None]):
         return None
 
     def action_sort(self) -> None:
-        self._sort_col = (self._sort_col + 1) % 2
-        self._sort_rev = False
+        self._sort.cycle()
         self._populate()
 
     def action_sort_reverse(self) -> None:
-        self._sort_rev = not self._sort_rev
+        self._sort.flip()
         self._populate()
 
     @on(DataTable.HeaderSelected, "#acl-table")
     def _sort_by_header(self, event: DataTable.HeaderSelected) -> None:
-        if event.column_index == self._sort_col:
-            self._sort_rev = not self._sort_rev
-        else:
-            self._sort_col, self._sort_rev = event.column_index, False
+        self._sort.click(event.column_index)
         self._populate()
 
     def action_add(self) -> None:
