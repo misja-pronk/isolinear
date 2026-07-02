@@ -9,11 +9,14 @@ Isolinear puts the full lifecycle of Databricks secret **scopes**, **secrets**, 
 ## Highlights
 
 - **Three-pane browser** — scopes, secrets, and a rich detail pane (identity, your access, the full ACL list, and the revealed value).
-- **Full CRUD** — create, edit, and delete secrets and scopes, with confirmation on destructive actions.
+- **Global search** — ++ctrl+f++ fuzzy-matches `scope/key` across the whole workspace and jumps straight to the secret.
+- **Full CRUD with undo** — create, edit, and delete secrets and scopes, with confirmation on destructive actions and ++u++ to restore a deleted secret.
 - **Permissions / ACLs** — grant, change, or remove READ / WRITE / MANAGE for users, groups, and service principals.
-- **Lazy reveal** — secret values are fetched only when you reveal or copy them, never bulk-loaded.
-- **Authorization overview** — a one-key "what can I touch" view of your effective permission on every scope.
+- **Lazy reveal, short-lived** — values are fetched only when you reveal or copy them, never bulk-loaded, and a revealed value hides itself after 30 seconds.
+- **Copy as code** — ++shift+c++ copies a `dbutils.secrets.get(...)`, Spark-conf, or CLI reference for notebooks and job specs.
+- **Authorization overview & stale-secret audit** — one-key views of your effective permission on every scope, and of every secret overdue for rotation.
 - **Keyboard-first** — vim and arrow navigation, fuzzy filtering, sortable tables, and a command palette.
+- **Read-only mode** — `isolinear --read-only` disables every mutation, safe for poking around production.
 - **No pre-configuration** — connect by Databricks Asset Bundle, `~/.databrickscfg` profile, or workspace URL (OAuth).
 
 ## Quick start
