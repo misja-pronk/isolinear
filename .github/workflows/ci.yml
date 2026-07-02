@@ -49,11 +49,12 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-      - run: uv sync
+      # mkdocs lives in the `docs` dependency group, which a plain sync skips
+      - run: uv sync --group docs
       - name: Build the docs site (strict — broken links/nav fail)
-        run: uv run mkdocs build --strict
+        run: uv run --group docs mkdocs build --strict
       - name: Screenshot pipeline still runs
-        run: uv run python docs/redesign/capture.py
+        run: uv run --group docs python docs/redesign/capture.py
 
   build:
     name: build (wheel + sdist)
