@@ -9,11 +9,15 @@ Isolinear puts the full lifecycle of Databricks secret **scopes**, **secrets**, 
 ## Highlights
 
 - **Three-pane browser** — scopes, secrets, and a rich detail pane (identity, your access, the full ACL list, and the revealed value).
-- **Full CRUD** — create, edit, and delete secrets and scopes, with confirmation on destructive actions.
-- **Permissions / ACLs** — grant, change, or remove READ / WRITE / MANAGE for users, groups, and service principals.
-- **Lazy reveal** — secret values are fetched only when you reveal or copy them, never bulk-loaded.
-- **Authorization overview** — a one-key "what can I touch" view of your effective permission on every scope.
-- **Keyboard-first** — vim and arrow navigation, fuzzy filtering, sortable tables, and a command palette.
+- **Global search** — ++ctrl+f++ fuzzy-matches `scope/key` across the whole workspace and jumps straight to the secret.
+- **Full CRUD with undo** — create, edit, move/copy/rename, and delete secrets and scopes, with confirmation on destructive actions and ++u++ to restore.
+- **Bulk .env import/export** — load a scope from a `.env` file; export keys (or values, clipboard-only) back out.
+- **Permissions / ACLs** — grant, change, or remove READ / WRITE / MANAGE, plus a **who-has-access** lookup for any principal.
+- **Lazy reveal, short-lived** — values are fetched only when you reveal or copy them, never bulk-loaded, and a revealed value hides itself after 30 seconds.
+- **Copy as code** — ++shift+c++ copies a `dbutils.secrets.get(...)`, Spark-conf, or CLI reference for notebooks and job specs.
+- **Authorization overview & stale-secret audit** — one-key views of your effective permission on every scope, and of every secret overdue for rotation.
+- **Keyboard-first** — vim and arrow navigation, fuzzy filtering, sortable tables, and a command palette; preferences persist across sessions.
+- **Direct connect & read-only mode** — `isolinear prod --read-only` drops you into a workspace with every mutation disabled.
 - **No pre-configuration** — connect by Databricks Asset Bundle, `~/.databrickscfg` profile, or workspace URL (OAuth).
 
 ## Quick start

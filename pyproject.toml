@@ -1,6 +1,6 @@
 [project]
 name = "isolinear"
-version = "0.2.8"
+version = "0.4.0"
 description = "A keyboard-driven terminal UI for managing Databricks secrets"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -64,6 +64,7 @@ dev = [
     "ruff>=0.6",
     "ty>=0.0.1a1",
     "types-pyyaml>=6.0.12.20260518",
+    "pytest-textual-snapshot>=1.0.0",
 ]
 docs = [
     "mkdocs-material>=9.7.5",

@@ -41,6 +41,21 @@ jobs:
       - name: Tests (pytest)
         run: uv run --python ${{ matrix.python-version }} pytest
 
+  docs:
+    name: docs (strict build + screenshots)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      # mkdocs lives in the `docs` dependency group, which a plain sync skips
+      - run: uv sync --group docs
+      - name: Build the docs site (strict — broken links/nav fail)
+        run: uv run --group docs mkdocs build --strict
+      - name: Screenshot pipeline still runs
+        run: uv run --group docs python docs/redesign/capture.py
+
   build:
     name: build (wheel + sdist)
     runs-on: ubuntu-latest

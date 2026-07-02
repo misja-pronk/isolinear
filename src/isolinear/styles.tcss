@@ -188,6 +188,14 @@ DataTable > .datatable--header {
     color: $value-color;
 }
 
+/* the 'a filter is active' chip above a filtered table */
+.filter-chip {
+    display: none;
+    height: 1;
+    padding: 0 1;
+    color: $foreground;
+}
+
 /* friendly empty states */
 .empty-hint {
     display: none;
@@ -245,6 +253,11 @@ ModalScreen {
     background: transparent;
     border: round $border 40%;
 }
+#dialog .form-error {
+    display: none;
+    color: $error;
+    margin-top: 1;
+}
 #dialog .buttons {
     align-horizontal: right;
     height: auto;
@@ -266,6 +279,11 @@ ModalScreen {
 }
 
 #auth-table {
+    height: auto;
+    max-height: 16;
+    margin-top: 1;
+}
+#search-results, #snippet-table, #audit-table, #principal-results {
     height: auto;
     max-height: 16;
     margin-top: 1;

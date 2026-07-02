@@ -6,6 +6,95 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-02
+
+### Added
+
+- **Multiline secret values**: the secret form gained a file field — point it
+  at `~/certs/key.pem` and the file's content becomes the value. The route for
+  PEM keys, certificates, and JSON blobs a single-line input can't take.
+- **Move / copy / rename** (`m`): one dialog covering all three — target scope
+  (Key Vault-backed scopes aren't offered) + key + a "keep the original"
+  checkbox. Moves are undo-able with `u`, like deletes.
+- **Bulk .env import/export**: import every KEY=VALUE pair from a `.env` file
+  into a scope (with an overwrite count in the confirm); export a scope as a
+  keys-only `.env` template, or with values behind a confirm — clipboard only,
+  never disk. Multiline values round-trip via JSON quoting.
+- **Who has access** (palette): fuzzy-search any principal across every
+  scope's ACLs, highest privilege first; enter jumps to the scope.
+- **Direct connect**: `isolinear prod` / `isolinear --profile prod` skips the
+  picker and connects to a discovered workspace by name.
+- **Persisted preferences**: theme, the `f` scope toggle, and the audit
+  threshold survive restarts (`~/.config/isolinear/settings.json`,
+  XDG-aware, corrupt-tolerant).
+
+### Changed
+
+- One shared sort implementation (`SortState`) now drives all seven sortable
+  tables — identical behavior, no more copy-paste drift.
+
+### Internal
+
+- A drift-guard test asserts every browse-screen binding appears in the help.
+- CI gained a docs job (`mkdocs build --strict` + the screenshot pipeline)
+  and visual snapshot tests (pytest-textual-snapshot) with committed
+  baselines for the browse, login, and audit screens.
+
+## [0.3.0] - 2026-07-02
+
+### Added
+
+- **Global search** (`ctrl+f`): fuzzy-match `scope/key` across the whole
+  workspace, served instantly from the warmed cache; enter jumps the browser
+  straight to the secret.
+- **Stale-secret audit** (`A`): every secret not updated within the threshold,
+  oldest first. `t` cycles the window through 30/90/180/365 days, enter jumps
+  to the secret, `c` copies the table as markdown for a rotation ticket. The
+  browser's Age column tints amber when a secret is overdue.
+- **Copy as code reference** (`C`): copy `dbutils.secrets.get(...)`, the
+  `{{secrets/scope/key}}` Spark-conf form, or the CLI command — without
+  touching the value.
+- **Undo delete** (`u`): the value is captured just before a secret delete, so
+  the delete is restorable from the toast.
+- **Read-only mode** (`isolinear --read-only`): browse, reveal, search, and
+  copy with every mutation disabled; the header shows a read-only marker and
+  the permissions editor becomes view-only.
+- **Secret hygiene**: a revealed value hides itself after 30 seconds, and a
+  "Forget revealed values" palette command purges every cached value from
+  memory.
+- Enter on a secret reveals/hides it (scopes keep enter = drill in).
+
+### Changed
+
+- Filters are visible and durable: a `⌕ query n/m` chip sits above a filtered
+  table, the filter survives refreshes (a new scope clears the secrets
+  filter), reopening `/` prefills the query, esc clears it, and ↑/↓ move the
+  selection while typing.
+- Sorting is consistent everywhere: `s` advances to the next column
+  (ascending), `S` reverses — on the browser panes, auth overview,
+  permissions editor, and login list alike.
+- The detail pane scrolls by keyboard, so long revealed values are reachable;
+  its ACL table is passive (header clicks still sort).
+- Delete follows the selection like the footer says: secret from the
+  secrets/detail panes, scope from the scopes pane — and the scope
+  confirmation names its secret count.
+- Azure Key Vault-backed scopes disable secret create/edit/delete up front
+  (with an explaining hint) instead of failing at the API.
+- Startup warming runs concurrently (bounded at 8), so large workspaces load
+  in seconds.
+
+### Fixed
+
+- `q` no longer quits the app from inside dialogs; it quits from the browse
+  and login screens only.
+- Editing a secret with an empty value no longer silently wipes it.
+- Removing an ACL now asks for confirmation, and warns when the grant you're
+  revoking is your own.
+- The delete confirmation no longer accepts `d` — a vim-twitch double-`d`
+  can't slip past the guard; confirming is a deliberate `y`.
+- Table rebuilds no longer emit a stale row-0 highlight that could steal the
+  selection (and collapse a revealed value) during a refresh or sort.
+
 ## [0.2.8] - 2026-07-01
 
 ### Added
@@ -179,7 +268,9 @@ Initial release.
 - Pre-loads and caches scopes/secrets/ACLs on startup.
 - Three switchable themes (violet, amber Okudagram, phosphor green).
 
-[Unreleased]: https://github.com/misja-pronk/isolinear/compare/v0.2.8...HEAD
+[Unreleased]: https://github.com/misja-pronk/isolinear/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/misja-pronk/isolinear/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/misja-pronk/isolinear/compare/v0.2.8...v0.3.0
 [0.2.8]: https://github.com/misja-pronk/isolinear/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/misja-pronk/isolinear/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/misja-pronk/isolinear/compare/v0.2.5...v0.2.6

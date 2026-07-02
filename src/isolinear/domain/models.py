@@ -6,8 +6,12 @@ workspaces, scopes, secrets, ACLs, identity.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+
+# Rotation-policy default: a secret untouched this long counts as stale.
+STALE_AFTER_DAYS = 90
 
 # Where a connection target was discovered. Shown to the user so it's always
 # clear where a workspace came from.
@@ -77,11 +81,32 @@ class Secret:
         dt = datetime.fromtimestamp(self.last_updated_ms / 1000, tz=UTC)
         return dt.strftime("%Y-%m-%d %H:%M")
 
+    @property
+    def age_days(self) -> float | None:
+        """Days since the last update; None when the timestamp is unknown."""
+        if not self.last_updated_ms:
+            return None
+        return max(0.0, (time.time() - self.last_updated_ms / 1000) / 86400)
+
+    def is_stale(self, days: int = STALE_AFTER_DAYS) -> bool:
+        """Not updated within `days` (unknown ages are never flagged)."""
+        age = self.age_days
+        return age is not None and age >= days
+
 
 @dataclass
 class Acl:
     principal: str
     permission: str  # READ | WRITE | MANAGE
+
+
+@dataclass
+class Settings:
+    """Persisted UI preferences — display choices only, never secret material."""
+
+    theme: str = "isolinear"
+    show_all_scopes: bool = False
+    audit_threshold: int = STALE_AFTER_DAYS
 
 
 @dataclass

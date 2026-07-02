@@ -10,11 +10,14 @@ from .config import config_path
 from .connector import DatabricksConnector
 from .databricks import DatabricksSecretStore
 from .profiles import DatabricksCfgProfileStore
+from .settings import JsonSettingsStore, settings_path
 
 __all__ = [
     "DatabricksBundleStore",
     "DatabricksCfgProfileStore",
     "DatabricksConnector",
     "DatabricksSecretStore",
+    "JsonSettingsStore",
     "config_path",
+    "settings_path",
 ]

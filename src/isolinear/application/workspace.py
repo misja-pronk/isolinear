@@ -102,8 +102,26 @@ class WorkspaceService:
     def secret(self, scope: str, key: str) -> Secret | None:
         return next((s for s in self.cache.secrets_for(scope) if s.key == key), None)
 
+    def all_secrets(self) -> list[Secret]:
+        """Every warmed secret across all scopes (the global-search projection)."""
+        return [
+            s for scope in self.cache.scopes for s in self.cache.secrets_for(scope.name)
+        ]
+
+    def acl_entries(self) -> list[tuple[str, Acl]]:
+        """Every (scope, acl) pair in the workspace (the principal-lookup view)."""
+        return [
+            (scope.name, a)
+            for scope in self.cache.scopes
+            for a in self.cache.acls_for(scope.name)
+        ]
+
     def cached_value(self, scope: str, key: str) -> str | None:
         return self.cache.cached_value(scope, key)
+
+    def forget_values(self) -> None:
+        """Purge every cached secret value; reveal will re-fetch on demand."""
+        self.cache.values.clear()
 
     def reveal(self, scope: str, key: str) -> str:
         """Return the secret value, fetching+caching it on first access."""

@@ -147,6 +147,23 @@ class StubConnector:
         raise NotImplementedError
 
 
+class ConnectingStubConnector:
+    """A `WorkspaceConnector` that 'connects' any profile to a seeded fake store."""
+
+    def __init__(self, store=None):
+        self.store = store or seeded_store()
+
+    def connect_profile(self, profile):
+        from isolinear.domain import Connected
+
+        return Connected(store=self.store, label=profile)
+
+    def connect_url(self, host):
+        from isolinear.domain import Connected
+
+        return Connected(store=self.store, label=host, host=host)
+
+
 class StubBundle:
     """A `BundleStore` that returns a preset bundle workspace (or none)."""
 

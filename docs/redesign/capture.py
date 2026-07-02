@@ -12,6 +12,8 @@ or coloured box. Regenerate and copy into place with:
     cp docs/redesign/after-permissions.svg docs/img/perms.svg
     cp docs/redesign/after-confirm.svg     docs/img/confirm.svg
     cp docs/redesign/after-login-empty.svg docs/img/login-empty.svg
+    cp docs/redesign/after-search.svg      docs/img/search.svg
+    cp docs/redesign/after-audit.svg       docs/img/audit.svg
 """
 
 from __future__ import annotations
@@ -73,6 +75,10 @@ async def main() -> None:
     await shot("after-confirm.svg", ["j", "tab", "d"])
     # authorization overview
     await shot("after-auth.svg", ["a"])
+    # global search, narrowed to "pass"
+    await shot("after-search.svg", ["ctrl+f", "p", "a", "s", "s"])
+    # stale-secret audit (seeded timestamps are years old, so all rows show)
+    await shot("after-audit.svg", ["A"])
     # login empty state — no bundle, no profiles
     await shot("after-login-empty.svg", [], with_session=False)
     # login / onboarding hub — a bundle (default) plus ~/.databrickscfg profiles

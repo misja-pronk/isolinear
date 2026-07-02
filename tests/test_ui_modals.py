@@ -68,7 +68,9 @@ async def test_new_secret_captures_typed_key_and_value():
     async with app.run_test() as pilot:
         await app.workers.wait_for_complete()
         await pilot.pause()
-        await pilot.press("n")  # new secret in the current scope (kv)
+        await pilot.press("j")  # kv is Key Vault-backed (read-only) — use prod
+        await pilot.pause()
+        await pilot.press("n")  # new secret in the current scope (prod)
         await pilot.pause()
         assert isinstance(app.screen, SecretFormModal)
         await pilot.press(*"token")  # into the focused key field
@@ -79,8 +81,102 @@ async def test_new_secret_captures_typed_key_and_value():
         await pilot.press("enter")  # submit
         await app.workers.wait_for_complete()
         await pilot.pause()
-        assert "token" in [s.key for s in session.secrets_for("kv")]
-        assert session.reveal("kv", "token") == "s3cret"
+        assert "token" in [s.key for s in session.secrets_for("prod")]
+        assert session.reveal("prod", "token") == "s3cret"
+
+
+async def test_edit_with_empty_value_does_not_submit():
+    """Submitting an edit with a blank value would silently wipe the secret."""
+    app, _ = _app()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        app.push_screen(SecretFormModal(scope="kv", key="tenant-id", edit=True))
+        await pilot.pause()
+        await pilot.press("enter")  # value field is empty — must not submit
+        await pilot.pause()
+        assert isinstance(app.screen, SecretFormModal)
+        await pilot.press(*"n3w-value")
+        await pilot.press("enter")  # with a value it submits normally
+        await pilot.pause()
+        assert not isinstance(app.screen, SecretFormModal)
+
+
+async def test_secret_value_read_from_file(tmp_path):
+    """Multiline values (PEM keys etc.) come in via the file field."""
+    pem = "-----BEGIN KEY-----\nline1\nline2\n-----END KEY-----\n"
+    value_file = tmp_path / "key.pem"
+    value_file.write_text(pem)
+    app, session = _app()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        await pilot.press("j", "n")  # new secret in prod
+        await pilot.pause()
+        app.screen.query_one("#f-key", Input).value = "tls-key"
+        app.screen.query_one("#f-file", Input).value = str(value_file)
+        await pilot.press("enter")
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert session.reveal("prod", "tls-key") == pem
+
+
+async def test_secret_form_rejects_value_and_file_together(tmp_path):
+    value_file = tmp_path / "v.txt"
+    value_file.write_text("x")
+    app, _ = _app()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        app.push_screen(SecretFormModal(scope="prod"))
+        await pilot.pause()
+        app.screen.query_one("#f-key", Input).value = "k"
+        app.screen.query_one("#f-value", Input).value = "typed"
+        app.screen.query_one("#f-file", Input).value = str(value_file)
+        await pilot.press("enter")
+        await pilot.pause()
+        assert isinstance(app.screen, SecretFormModal)  # not submitted
+        assert app.screen.query_one("#form-error").display
+        await pilot.press("escape")
+
+
+async def test_secret_form_reports_unreadable_file():
+    app, _ = _app()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        app.push_screen(SecretFormModal(scope="prod"))
+        await pilot.pause()
+        app.screen.query_one("#f-key", Input).value = "k"
+        app.screen.query_one("#f-file", Input).value = "/nonexistent/nope.pem"
+        await pilot.press("enter")
+        await pilot.pause()
+        assert isinstance(app.screen, SecretFormModal)
+        assert app.screen.query_one("#form-error").display
+        await pilot.press("escape")
+
+
+async def test_q_inside_a_dialog_does_not_quit_the_app():
+    """`q` quits from the browse screen only — from a dialog (focus on a
+    button, so no Input swallows it) it must not bubble into an app quit."""
+    app, session = _app()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        app.push_screen(ConfirmModal("Delete secret", "Permanently delete."))
+        await pilot.pause()
+        await pilot.press("q")
+        await pilot.pause()
+        assert app.is_running
+        assert isinstance(app.screen, ConfirmModal)
+        await pilot.press("escape")
+        await pilot.pause()
+        app.push_screen(PermissionsScreen(session, "kv"))
+        await pilot.pause()
+        await pilot.press("q")
+        await pilot.pause()
+        assert app.is_running
+        assert isinstance(app.screen, PermissionsScreen)
 
 
 async def test_grant_permission_captures_typed_principal():
