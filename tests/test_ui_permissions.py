@@ -5,7 +5,7 @@ from textual.widgets import Input, Select
 from fakes import seeded_store, stub_onboarding
 from isolinear.app import IsolinearApp
 from isolinear.application import WorkspaceService
-from isolinear.interface.modals import AclFormModal, PermissionsScreen
+from isolinear.interface.modals import AclFormModal, ConfirmModal, PermissionsScreen
 
 
 def _app() -> tuple[IsolinearApp, WorkspaceService]:
@@ -42,17 +42,52 @@ async def test_add_permission_via_form():
         assert perms.get("bot@corp.com") == "WRITE"
 
 
-async def test_remove_permission():
+async def test_remove_permission_requires_confirm():
     app, session = _app()
     async with app.run_test() as pilot:
         await app.workers.wait_for_complete()
         await pilot.pause()
         await pilot.press("p")  # scope 'kv' has principal 'users'
         await pilot.pause()
-        await pilot.press("d")  # remove highlighted row
+        await pilot.press("d")  # opens the confirm dialog — nothing removed yet
+        await pilot.pause()
+        assert isinstance(app.screen, ConfirmModal)
+        assert any(a.principal == "users" for a in session.acls_for("kv"))
+        await pilot.press("y")  # confirm
         await app.workers.wait_for_complete()
         await pilot.pause()
         assert session.acls_for("kv") == []
+
+
+async def test_remove_permission_can_be_cancelled():
+    app, session = _app()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        await pilot.press("p")
+        await pilot.pause()
+        await pilot.press("d")
+        await pilot.pause()
+        await pilot.press("escape")  # back out — the grant must survive
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert isinstance(app.screen, PermissionsScreen)
+        assert any(a.principal == "users" for a in session.acls_for("kv"))
+
+
+async def test_removing_your_own_access_warns():
+    app, session = _app()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        session.set_acl("kv", "me@corp.com", "MANAGE")  # the fake identity's user
+        await pilot.press("p")  # default sort: highest access first -> me on top
+        await pilot.pause()
+        await pilot.press("d")
+        await pilot.pause()
+        assert isinstance(app.screen, ConfirmModal)
+        assert "This is you" in app.screen._message
+        await pilot.press("escape")
 
 
 async def test_command_palette_opens():

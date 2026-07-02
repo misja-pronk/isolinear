@@ -83,6 +83,46 @@ async def test_new_secret_captures_typed_key_and_value():
         assert session.reveal("kv", "token") == "s3cret"
 
 
+async def test_edit_with_empty_value_does_not_submit():
+    """Submitting an edit with a blank value would silently wipe the secret."""
+    app, _ = _app()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        app.push_screen(SecretFormModal(scope="kv", key="tenant-id", edit=True))
+        await pilot.pause()
+        await pilot.press("enter")  # value field is empty — must not submit
+        await pilot.pause()
+        assert isinstance(app.screen, SecretFormModal)
+        await pilot.press(*"n3w-value")
+        await pilot.press("enter")  # with a value it submits normally
+        await pilot.pause()
+        assert not isinstance(app.screen, SecretFormModal)
+
+
+async def test_q_inside_a_dialog_does_not_quit_the_app():
+    """`q` quits from the browse screen only — from a dialog (focus on a
+    button, so no Input swallows it) it must not bubble into an app quit."""
+    app, session = _app()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        app.push_screen(ConfirmModal("Delete secret", "Permanently delete."))
+        await pilot.pause()
+        await pilot.press("q")
+        await pilot.pause()
+        assert app.is_running
+        assert isinstance(app.screen, ConfirmModal)
+        await pilot.press("escape")
+        await pilot.pause()
+        app.push_screen(PermissionsScreen(session, "kv"))
+        await pilot.pause()
+        await pilot.press("q")
+        await pilot.pause()
+        assert app.is_running
+        assert isinstance(app.screen, PermissionsScreen)
+
+
 async def test_grant_permission_captures_typed_principal():
     app, session = _app()
     async with app.run_test() as pilot:

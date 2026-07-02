@@ -74,6 +74,7 @@ class MainScreen(Screen[None]):
         Binding("slash", "filter", "Filter"),
         Binding("f", "toggle_scopes", "Mine/all", show=False),
         Binding("question_mark", "help", "Help"),
+        Binding("q", "app.quit", "Quit", show=False),
         Binding("escape", "cancel_filter", "Clear filter", show=False),
         # navigation — vim + arrows, fully keyboard driven
         Binding("tab,right,l", "focus_pane('right')", "Pane →", show=False),

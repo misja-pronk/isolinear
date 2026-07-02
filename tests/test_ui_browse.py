@@ -7,6 +7,7 @@ from textual.widgets import DataTable
 from fakes import seeded_store, stub_onboarding
 from isolinear.app import IsolinearApp
 from isolinear.application import WorkspaceService
+from isolinear.interface.modals import ConfirmModal
 from isolinear.interface.screens.login import LoginScreen
 from isolinear.interface.screens.main import MainScreen
 from isolinear.interface.widgets import ScopesPane
@@ -151,6 +152,24 @@ async def test_delete_secret_via_confirm_keeps_siblings():
         await pilot.pause()
         remaining = [s.key for s in session.secrets_for("prod")]
         assert remaining == ["db-password"]
+
+
+async def test_double_d_does_not_confirm_delete():
+    """`d` opens the confirm dialog; a vim-twitch second `d` must not confirm."""
+    app, session = _app_with_session()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        await pilot.press("j")  # prod (api-key, db-password)
+        await pilot.press("tab")  # focus secrets so 'd' targets the secret
+        await pilot.pause()
+        await pilot.press("d")  # confirm modal
+        await pilot.press("d")  # repeat — must be ignored
+        await pilot.pause()
+        assert isinstance(app.screen, ConfirmModal)
+        keys = [s.key for s in session.secrets_for("prod")]
+        assert keys == ["api-key", "db-password"]
+        await pilot.press("escape")
 
 
 async def test_new_scope_via_modal_updates_pane():

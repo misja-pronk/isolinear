@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+from functools import partial
 
+from rich.markup import escape
 from rich.text import Text
 from textual import on, work
 from textual.app import ComposeResult
@@ -25,31 +27,39 @@ def key_label(label: str) -> str:
 
 
 class ConfirmModal(ModalScreen[bool]):
-    """Yes/No guard for destructive actions."""
+    """Yes/No guard for destructive actions.
+
+    Confirming takes a deliberate `y` — never the key that opened the dialog
+    (e.g. `d` for delete), so a double-tap can't slip past the guard.
+    """
 
     BINDINGS = [
         Binding("escape,c,n", "cancel", "Cancel"),
-        Binding("y,d,o", "confirm", "Confirm"),
+        Binding("y,o", "confirm", "Confirm"),
     ]
 
-    def __init__(self, title: str, message: str, danger: bool = True) -> None:
+    def __init__(
+        self, title: str, message: str, danger: bool = True, ok_label: str = ""
+    ) -> None:
         super().__init__()
         self._title = title
         self._message = message
         self._danger = danger
+        self._ok_label = ok_label or ("Delete" if danger else "OK")
 
     def compose(self) -> ComposeResult:
-        ok_label = "Delete" if self._danger else "OK"
         with Vertical(id="dialog", classes="danger" if self._danger else ""):
             yield Static(self._title, classes="dialog-title")
             yield Static(self._message)
             with Horizontal(classes="buttons"):
                 yield Button(key_label("Cancel"), id="cancel", variant="default")
+                # danger labels get no access-key underline: only `y` confirms
                 yield Button(
-                    key_label(ok_label),
+                    self._ok_label if self._danger else key_label(self._ok_label),
                     id="ok",
                     variant="error" if self._danger else "primary",
                 )
+            yield Static("[$text-muted]y confirm · esc cancel[/]", classes="dialog-hint")
 
     @on(Button.Pressed, "#ok")
     def action_confirm(self) -> None:
@@ -103,6 +113,10 @@ class SecretFormModal(ModalScreen[tuple[str, str] | None]):
         value = self.query_one("#f-value", Input).value
         if not key:
             self.query_one("#f-key", Input).focus()
+            return
+        if not value:
+            # saving an empty value on edit would silently wipe the secret
+            self.query_one("#f-value", Input).focus()
             return
         self.dismiss((key, value))
 
@@ -446,7 +460,20 @@ class PermissionsScreen(ModalScreen[None]):
 
     def action_remove(self) -> None:
         principal = self._selected()
-        if principal:
+        if not principal:
+            return
+        message = (
+            f"Revoke [b]{escape(principal)}[/]'s access to [b]{escape(self._scope)}[/]."
+        )
+        if principal == self._session.identity.user_name:
+            message += "\n[$warning]This is you — you may lose access to this scope.[/]"
+        self.app.push_screen(
+            ConfirmModal("Remove access", message, ok_label="Remove"),
+            partial(self._remove_acl_if, principal),
+        )
+
+    def _remove_acl_if(self, principal: str, confirmed: bool | None) -> None:
+        if confirmed:
             self._remove_acl(principal)
 
     @work(group="acl")

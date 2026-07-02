@@ -10,7 +10,6 @@ them into the `OnboardingService`, installs the theme, and hands off to
 from __future__ import annotations
 
 from textual.app import App
-from textual.binding import Binding
 
 from .application import OnboardingService, WorkspaceService
 from .infrastructure import (
@@ -25,7 +24,8 @@ from .interface.theme import ISOLINEAR_THEMES
 class IsolinearApp(App[None]):
     CSS_PATH = "styles.tcss"
     TITLE = "Isolinear"
-    BINDINGS = [Binding("q", "quit", "Quit", show=False)]
+    # `q` quits from the browse/login screens only (they bind it themselves) —
+    # an app-level binding would bubble up from dialogs and quit mid-confirm.
 
     def __init__(
         self,
