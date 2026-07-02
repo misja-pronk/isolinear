@@ -621,6 +621,7 @@ class HelpScreen(ModalScreen[None]):
         ("", ""),
         ("n / N", "New secret / new scope"),
         ("e", "Edit secret value"),
+        ("m", "Move / copy / rename secret"),
         ("d", "Delete secret/scope (confirm)"),
         ("u", "Undo the last secret delete"),
         ("p", "Manage scope permissions (ACLs)"),
