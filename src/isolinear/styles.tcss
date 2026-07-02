@@ -188,6 +188,14 @@ DataTable > .datatable--header {
     color: $value-color;
 }
 
+/* the 'a filter is active' chip above a filtered table */
+.filter-chip {
+    display: none;
+    height: 1;
+    padding: 0 1;
+    color: $foreground;
+}
+
 /* friendly empty states */
 .empty-hint {
     display: none;

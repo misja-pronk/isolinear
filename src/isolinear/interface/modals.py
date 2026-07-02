@@ -159,10 +159,11 @@ class HelpScreen(ModalScreen[None]):
         ("←→ / h l", "Move between panes"),
         ("tab", "Next pane"),
         ("g / G", "Jump to top / bottom"),
-        ("enter", "Drill scope → secrets"),
-        ("/", "Filter the focused pane"),
+        ("enter", "Scopes: open · Secrets: reveal"),
+        ("/", "Filter the focused pane (↑↓ move while typing)"),
+        ("esc", "Clear the filter"),
         ("f", "Scopes: only mine / all"),
-        ("s", "Sort the focused table / click a column"),
+        ("s / S", "Sort: next column / reverse"),
         ("", ""),
         ("n / N", "New secret / new scope"),
         ("e", "Edit secret value"),
@@ -196,6 +197,7 @@ class AuthScreen(ModalScreen[None]):
     BINDINGS = [
         Binding("escape,q,a", "close", "Close"),
         Binding("s", "sort", "Sort", show=False),
+        Binding("S", "sort_reverse", "Sort reverse", show=False),
     ]
 
     def __init__(self, identity: Identity, summaries: list[AuthSummary]) -> None:
@@ -218,7 +220,7 @@ class AuthScreen(ModalScreen[None]):
             table: DataTable = DataTable(id="auth-table", zebra_stripes=False)
             table.cursor_type = "row"
             yield table
-            yield Static("[$text-muted]s sort · esc close[/]", classes="dialog-hint")
+            yield Static("[$text-muted]s/S sort · esc close[/]", classes="dialog-hint")
 
     def on_mount(self) -> None:
         self._populate()
@@ -249,11 +251,12 @@ class AuthScreen(ModalScreen[None]):
         return sorted(self._summaries, key=keys[self._sort_col], reverse=self._sort_rev)
 
     def action_sort(self) -> None:
-        if not self._sort_rev:
-            self._sort_rev = True
-        else:
-            self._sort_rev = False
-            self._sort_col = (self._sort_col + 1) % 3
+        self._sort_col = (self._sort_col + 1) % 3
+        self._sort_rev = False
+        self._populate()
+
+    def action_sort_reverse(self) -> None:
+        self._sort_rev = not self._sort_rev
         self._populate()
 
     @on(DataTable.HeaderSelected, "#auth-table")
@@ -340,6 +343,7 @@ class PermissionsScreen(ModalScreen[None]):
         Binding("e", "edit", "Edit"),
         Binding("d,delete,x", "remove", "Remove"),
         Binding("s", "sort", "Sort", show=False),
+        Binding("S", "sort_reverse", "Sort reverse", show=False),
     ]
 
     def __init__(self, session: WorkspaceService, scope: str) -> None:
@@ -359,7 +363,7 @@ class PermissionsScreen(ModalScreen[None]):
             table.cursor_type = "row"
             yield table
             yield Static(
-                "[$text-muted]a add · e change · d remove · s sort · esc close[/]",
+                "[$text-muted]a add · e change · d remove · s/S sort · esc close[/]",
                 classes="dialog-hint",
             )
 
@@ -406,11 +410,12 @@ class PermissionsScreen(ModalScreen[None]):
         return None
 
     def action_sort(self) -> None:
-        if not self._sort_rev:
-            self._sort_rev = True
-        else:
-            self._sort_rev = False
-            self._sort_col = (self._sort_col + 1) % 2
+        self._sort_col = (self._sort_col + 1) % 2
+        self._sort_rev = False
+        self._populate()
+
+    def action_sort_reverse(self) -> None:
+        self._sort_rev = not self._sort_rev
         self._populate()
 
     @on(DataTable.HeaderSelected, "#acl-table")

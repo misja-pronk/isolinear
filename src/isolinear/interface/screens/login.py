@@ -85,6 +85,7 @@ class LoginScreen(Screen[ConnectResult | None]):
         Binding("escape", "back", "Back", show=False),
         Binding("a,u", "add_url", "Add by URL", show=False),
         Binding("s", "sort", "Sort", show=False),
+        Binding("S", "sort_reverse", "Sort reverse", show=False),
         Binding("q", "quit_app", "Quit", show=False),
     ]
 
@@ -112,7 +113,9 @@ class LoginScreen(Screen[ConnectResult | None]):
                 table: DataTable = DataTable(id="ws-table", zebra_stripes=False)
                 table.cursor_type = "row"
                 yield table
-                yield Static("[$text-muted]enter connect  ·  s sort[/]", id="login-hint")
+                yield Static(
+                    "[$text-muted]enter connect  ·  s/S sort[/]", id="login-hint"
+                )
             else:
                 yield Static("GET STARTED", classes="login-section")
                 yield Static(
@@ -177,14 +180,15 @@ class LoginScreen(Screen[ConnectResult | None]):
         return self._order[row] if 0 <= row < len(self._order) else None
 
     def action_sort(self) -> None:
-        """Cycle the sort: unsorted → col asc → col desc → next col …"""
+        """Advance to the next column, ascending (from natural order to col 0)."""
+        self._sort_col = 0 if self._sort_col is None else (self._sort_col + 1) % 3
+        self._sort_rev = False
+        self._populate()
+
+    def action_sort_reverse(self) -> None:
         if self._sort_col is None:
-            self._sort_col, self._sort_rev = 0, False
-        elif not self._sort_rev:
-            self._sort_rev = True
-        else:
-            self._sort_rev = False
-            self._sort_col = (self._sort_col + 1) % 3
+            self._sort_col = 0
+        self._sort_rev = not self._sort_rev
         self._populate()
 
     @on(DataTable.HeaderSelected, "#ws-table")

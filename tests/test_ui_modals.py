@@ -68,7 +68,9 @@ async def test_new_secret_captures_typed_key_and_value():
     async with app.run_test() as pilot:
         await app.workers.wait_for_complete()
         await pilot.pause()
-        await pilot.press("n")  # new secret in the current scope (kv)
+        await pilot.press("j")  # kv is Key Vault-backed (read-only) — use prod
+        await pilot.pause()
+        await pilot.press("n")  # new secret in the current scope (prod)
         await pilot.pause()
         assert isinstance(app.screen, SecretFormModal)
         await pilot.press(*"token")  # into the focused key field
@@ -79,8 +81,8 @@ async def test_new_secret_captures_typed_key_and_value():
         await pilot.press("enter")  # submit
         await app.workers.wait_for_complete()
         await pilot.pause()
-        assert "token" in [s.key for s in session.secrets_for("kv")]
-        assert session.reveal("kv", "token") == "s3cret"
+        assert "token" in [s.key for s in session.secrets_for("prod")]
+        assert session.reveal("prod", "token") == "s3cret"
 
 
 async def test_edit_with_empty_value_does_not_submit():

@@ -154,6 +154,98 @@ async def test_delete_secret_via_confirm_keeps_siblings():
         assert remaining == ["db-password"]
 
 
+async def test_enter_on_secret_toggles_reveal():
+    app, _ = _app_with_session()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        main = cast(MainScreen, app.screen)
+        await pilot.press("j")  # prod
+        await pilot.press("tab")  # focus secrets (api-key)
+        await pilot.pause()
+        await pilot.press("enter")  # reveal
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert main._revealed == ("prod", "api-key")
+        await pilot.press("enter")  # hide again
+        await pilot.pause()
+        assert main._revealed is None
+
+
+async def test_keyvault_scope_blocks_secret_mutations():
+    """Scope 'kv' is Azure Key Vault-backed: n/e must not open the form."""
+    app, _ = _app_with_session()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        await pilot.press("n")  # blocked — the binding is disabled
+        await pilot.pause()
+        assert isinstance(app.screen, MainScreen)
+        await pilot.press("tab")  # focus secrets (tenant-id)
+        await pilot.pause()
+        await pilot.press("e")
+        await pilot.pause()
+        assert isinstance(app.screen, MainScreen)
+
+
+async def test_filter_survives_enter_and_esc_clears_it():
+    app, _ = _app_with_session()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        main = cast(MainScreen, app.screen)
+        await pilot.press("j")  # prod: api-key, db-password
+        await pilot.press("tab")
+        await pilot.pause()
+        table = main.secrets_pane.query_one(DataTable)
+        await pilot.press("slash")
+        await pilot.press("d", "b")
+        await pilot.press("enter")  # pin the filter, back to the table
+        await pilot.pause()
+        assert table.row_count == 1
+        assert main.secrets_pane.query_one("#secrets-filter").display  # chip shows it
+        await pilot.press("r")  # refresh the scope — the filter must survive
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert table.row_count == 1
+        await pilot.press("escape")  # esc on the filtered table clears it
+        await pilot.pause()
+        assert table.row_count == 2
+        assert not main.secrets_pane.query_one("#secrets-filter").display
+
+
+async def test_arrows_navigate_the_list_while_filtering():
+    app, _ = _app_with_session()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        main = cast(MainScreen, app.screen)
+        await pilot.press("j")  # prod
+        await pilot.press("tab")
+        await pilot.pause()
+        await pilot.press("slash")  # filter bar takes focus
+        await pilot.press("down")  # ...but ↓ still moves the table cursor
+        await pilot.pause()
+        assert main.current_secret == "db-password"
+
+
+async def test_delete_from_detail_pane_targets_the_secret():
+    app, _ = _app_with_session()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        await pilot.press("j")  # prod
+        await pilot.press("tab")  # secrets (api-key)
+        await pilot.press("l")  # detail pane
+        await pilot.pause()
+        assert getattr(app.focused, "id", None) == "detail-scroll"
+        await pilot.press("d")  # footer says Delete — it must target the secret
+        await pilot.pause()
+        assert isinstance(app.screen, ConfirmModal)
+        assert app.screen._title == "Delete secret"
+        await pilot.press("escape")
+
+
 async def test_double_d_does_not_confirm_delete():
     """`d` opens the confirm dialog; a vim-twitch second `d` must not confirm."""
     app, session = _app_with_session()

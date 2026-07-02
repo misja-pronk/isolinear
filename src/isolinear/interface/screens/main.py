@@ -15,7 +15,7 @@ from textual import events, on, work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.command import DiscoveryHit, Hit, Hits, Provider
-from textual.containers import Horizontal
+from textual.containers import Horizontal, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import DataTable, Footer, Input, Static
 
@@ -71,6 +71,7 @@ class MainScreen(Screen[None]):
         Binding("R", "refresh_workspace", "Refresh all", show=False),
         Binding("a", "auth", "Auth", show=False),
         Binding("s", "sort", "Sort", show=False),
+        Binding("S", "sort_reverse", "Sort reverse", show=False),
         Binding("slash", "filter", "Filter"),
         Binding("f", "toggle_scopes", "Mine/all", show=False),
         Binding("question_mark", "help", "Help"),
@@ -201,17 +202,29 @@ class MainScreen(Screen[None]):
     def action_filter(self) -> None:
         if self.session is None:
             return
+        # filter the focused pane; from the detail pane, the secrets you
+        # drilled into are the nearest list — filter those.
         focused = getattr(self.focused, "id", None)
-        self._filter_target = "secrets" if focused == "secrets-table" else "scopes"
+        self._filter_target = "scopes" if focused == "scopes-table" else "secrets"
         bar = self.query_one("#filter-bar", Input)
         bar.placeholder = f"filter {self._filter_target}… (esc to clear)"
-        bar.value = ""
+        bar.value = self._target_pane().filter_text  # reopen = refine, not restart
         bar.display = True
         bar.focus()
+
+    def _target_pane(self) -> ScopesPane | SecretsPane:
+        return self.secrets_pane if self._filter_target == "secrets" else self.scopes_pane
 
     def action_cancel_filter(self) -> None:
         if self.query_one("#filter-bar", Input).display:
             self._close_filter(clear=True)
+            return
+        # esc on a filtered pane clears its pinned filter
+        fid = getattr(self.focused, "id", None)
+        if fid == "scopes-table" and self.scopes_pane.filter_text:
+            self.scopes_pane.apply_filter("")
+        elif fid == "secrets-table" and self.secrets_pane.filter_text:
+            self.secrets_pane.apply_filter("")
 
     def _close_filter(self, *, clear: bool) -> None:
         if clear:
@@ -294,7 +307,7 @@ class MainScreen(Screen[None]):
         if session is None:
             return
         self.current_scope = self.current_secret = self._revealed = None
-        self.scopes_pane.show([])
+        self.scopes_pane.show([], reset_filter=True)
         self.secrets_pane.clear()
         self.detail_pane.clear()
         self._render_breadcrumb()
@@ -315,7 +328,7 @@ class MainScreen(Screen[None]):
             return
         # during load nothing is warmed yet, so access is unknown — show every
         # scope; the list narrows to the accessible ones once warming completes.
-        self.scopes_pane.show(self._scope_rows(show_all=True))
+        self.scopes_pane.show(self._scope_rows(show_all=True), reset_filter=True)
 
         total = len(scopes)
         for i, scope in enumerate(scopes, 1):
@@ -334,8 +347,8 @@ class MainScreen(Screen[None]):
         self.current_secret = None
         self._revealed = None
         secrets = self._sess.secrets_for(name)
-        self.secrets_pane.show(name, secrets)
         scope = self._sess.scope(name)
+        self.secrets_pane.show(name, secrets, keyvault=bool(scope and scope.is_keyvault))
         if scope:
             self.detail_pane.show_scope(
                 scope, len(secrets), self._sess.acls_for(name), self._access_for(name)
@@ -387,11 +400,22 @@ class MainScreen(Screen[None]):
     def _scope_activated(self) -> None:
         self.secrets_pane.focus_table()
 
+    @on(DataTable.RowSelected, "#secrets-table")
+    def _secret_activated(self) -> None:
+        self.action_reveal()
+
     # ── keyboard navigation ─────────────────────────────────────────────
-    _PANES = ("scopes-table", "secrets-table", "acl-table")
+    _PANES = ("scopes-table", "secrets-table", "detail-scroll")
 
     def action_vi(self, direction: str) -> None:
-        fn = getattr(self.focused, f"action_cursor_{direction}", None)
+        focused = self.focused
+        if getattr(focused, "id", None) == "filter-bar":
+            # while typing a filter, ↑/↓ drive the table being filtered
+            table = self.query_one(f"#{self._filter_target}-table", DataTable)
+            focused = table
+        fn = getattr(focused, f"action_cursor_{direction}", None) or getattr(
+            focused, f"action_scroll_{direction}", None
+        )
         if fn:
             fn()
 
@@ -399,8 +423,6 @@ class MainScreen(Screen[None]):
         current = getattr(self.focused, "id", None)
         idx = self._PANES.index(current) if current in self._PANES else 0
         step = 1 if direction == "right" else -1
-        # step to the next pane that's actually visible — the ACL table hides
-        # when the selection has no permissions.
         for _ in range(len(self._PANES)):
             idx = (idx + step) % len(self._PANES)
             widget = self.query_one(f"#{self._PANES[idx]}")
@@ -418,23 +440,53 @@ class MainScreen(Screen[None]):
         if isinstance(widget, DataTable) and widget.row_count:
             row = 0 if where == "top" else widget.row_count - 1
             widget.move_cursor(row=row)
+        elif isinstance(widget, VerticalScroll):
+            widget.scroll_home() if where == "top" else widget.scroll_end()
 
     def action_sort(self) -> None:
+        pane = self._sortable_pane()
+        if pane:
+            pane.cycle_sort()
+
+    def action_sort_reverse(self) -> None:
+        pane = self._sortable_pane()
+        if pane:
+            pane.flip_sort()
+
+    def _sortable_pane(self) -> ScopesPane | SecretsPane | DetailPane | None:
         fid = getattr(self.focused, "id", None)
         if fid == "secrets-table":
-            self.secrets_pane.cycle_sort()
-        elif fid == "scopes-table":
-            self.scopes_pane.cycle_sort()
-        elif fid == "acl-table":
-            self.detail_pane.cycle_sort()
+            return self.secrets_pane
+        if fid == "scopes-table":
+            return self.scopes_pane
+        if fid == "detail-scroll":
+            return self.detail_pane
+        return None
+
+    def _scope_is_keyvault(self, name: str | None = None) -> bool:
+        """Azure Key Vault-backed scopes are read-only through the secrets API."""
+        name = name or self.current_scope
+        if not (self.session and name):
+            return False
+        scope = self._sess.scope(name)
+        return bool(scope and scope.is_keyvault)
+
+    def _notify_keyvault(self) -> None:
+        self.notify(
+            f"“{self.current_scope}” is Key Vault-backed — manage its secrets in Azure."
+        )
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         """Context-aware footer — gate actions on the current *selection*, not the
         focused pane, so the footer stays correct whichever of the three panes has
         focus. In Textual, returning False hides AND disables the binding."""
-        if action in ("reveal", "copy", "edit_secret"):
+        if action in ("reveal", "copy"):
             return self.current_secret is not None
-        if action in ("new_secret", "permissions"):
+        if action == "edit_secret":
+            return self.current_secret is not None and not self._scope_is_keyvault()
+        if action == "new_secret":
+            return self.current_scope is not None and not self._scope_is_keyvault()
+        if action in ("permissions", "delete"):
             return self.current_scope is not None
         return True
 
@@ -448,7 +500,8 @@ class MainScreen(Screen[None]):
             ("Manage scope permissions", self.action_permissions),
             ("Reveal secret value", self.action_reveal),
             ("Copy secret value", self.action_copy),
-            ("Sort", self.action_sort),
+            ("Sort: next column", self.action_sort),
+            ("Sort: reverse direction", self.action_sort_reverse),
             ("Refresh scope", self.action_refresh_scope),
             ("Refresh workspace", self.action_refresh_workspace),
             ("Authorization overview", self.action_auth),
@@ -500,11 +553,17 @@ class MainScreen(Screen[None]):
         if not (self.session and self.current_scope):
             self.notify("Select a scope first.")
             return
+        if self._scope_is_keyvault():
+            self._notify_keyvault()
+            return
         self.app.push_screen(SecretFormModal(self.current_scope), self._on_secret_form)
 
     def action_edit_secret(self) -> None:
         if not (self.session and self.current_scope and self.current_secret):
             self.notify("Select a secret first.")
+            return
+        if self._scope_is_keyvault():
+            self._notify_keyvault()
             return
         self.app.push_screen(
             SecretFormModal(self.current_scope, key=self.current_secret, edit=True),
@@ -529,8 +588,14 @@ class MainScreen(Screen[None]):
         self.notify(f"Secret “{key}” saved.")
 
     def action_delete(self) -> None:
+        """Delete what's selected: the scope from the scopes pane; the secret from
+        the secrets/detail panes (falling back to the scope when it has none)."""
         focused_id = getattr(self.focused, "id", None)
-        if focused_id == "secrets-table" and self.current_scope and self.current_secret:
+        target_secret = focused_id != "scopes-table" and self.current_secret
+        if target_secret and self.current_scope and self.current_secret:
+            if self._scope_is_keyvault():
+                self._notify_keyvault()
+                return
             scope, key = self.current_scope, self.current_secret
             self.app.push_screen(
                 ConfirmModal(
@@ -540,12 +605,18 @@ class MainScreen(Screen[None]):
                 ),
                 partial(self._delete_secret_if, scope, key),
             )
-        elif focused_id == "scopes-table" and self.current_scope:
+        elif self.current_scope:
             name = self.current_scope
+            count = len(self._sess.secrets_for(name))
+            tail = (
+                f"and its {count} secret{'s' if count != 1 else ''}"
+                if count
+                else "(it has no secrets)"
+            )
             self.app.push_screen(
                 ConfirmModal(
                     "Delete scope",
-                    f"Permanently delete [b]{name}[/] and all its secrets.\n"
+                    f"Permanently delete [b]{name}[/] {tail}.\n"
                     "[$text-muted]This can't be undone.[/]",
                 ),
                 partial(self._delete_scope_if, name),

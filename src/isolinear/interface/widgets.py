@@ -66,6 +66,11 @@ def perm_cell(app: App, permission: str) -> Text:
     return Text(permission, style=style)
 
 
+def filter_chip(query: str, shown: int, total: int) -> str:
+    """The 'a filter is active' indicator shown above a filtered table."""
+    return f"[$text-muted]⌕[/] [b]{escape(query)}[/] [$text-muted]{shown}/{total}[/]"
+
+
 @dataclass
 class ScopeRow:
     """View model for one scope row."""
@@ -92,10 +97,15 @@ class ScopesPane(Vertical):
         self._sort_rev = False
 
     def compose(self) -> ComposeResult:
+        yield Static("", id="scopes-filter", classes="filter-chip")
         table: DataTable = DataTable(id="scopes-table", zebra_stripes=False)
         table.cursor_type = "row"
         yield table
         yield Static("", id="scopes-empty", classes="empty-hint")
+
+    @property
+    def filter_text(self) -> str:
+        return self._filter
 
     def show(
         self,
@@ -104,9 +114,13 @@ class ScopesPane(Vertical):
         keep: str | None = None,
         focus: bool = True,
         empty_hint: str | None = None,
+        reset_filter: bool = False,
     ) -> None:
+        """Repaint with fresh rows. An active filter survives a refresh so the
+        list doesn't silently widen; `reset_filter` is for full (re)loads."""
         self._rows = rows
-        self._filter = ""
+        if reset_filter:
+            self._filter = ""
         self._empty_hint = empty_hint
         self._rebuild(focus=focus, keep=keep)
 
@@ -115,6 +129,8 @@ class ScopesPane(Vertical):
         self._rebuild(focus=False)
 
     def _rebuild(self, *, focus: bool, keep: str | None = None) -> None:
+        chip = self.query_one("#scopes-filter", Static)
+        chip.display = bool(self._filter)
         table = self.query_one(DataTable)
         table.clear(columns=True)
         arrow = "↓" if self._sort_rev else "↑"
@@ -127,6 +143,8 @@ class ScopesPane(Vertical):
         self._visible = self._sorted(
             [r for r in self._rows if fuzzy_match(self._filter, r.name)]
         )
+        if self._filter:
+            chip.update(filter_chip(self._filter, len(self._visible), len(self._rows)))
         for r in self._visible:
             table.add_row(r.name, Text(str(r.count), style="grey62"), key=r.name)
         table.display = bool(self._visible)
@@ -151,8 +169,12 @@ class ScopesPane(Vertical):
 
     @on(DataTable.RowHighlighted, "#scopes-table")
     def _highlighted(self, event: DataTable.RowHighlighted) -> None:
-        if event.row_key is not None and event.row_key.value:
-            self.post_message(self.Selected(event.row_key.value))
+        # a rebuild queues a highlight for row 0 before move_cursor restores the
+        # selection — only forward events that match where the cursor now is,
+        # so a stale one can't steal the selection mid-refresh/sort.
+        name = event.row_key.value if event.row_key is not None else None
+        if name is not None and name == self._cursor_scope():
+            self.post_message(self.Selected(name))
 
     # ── sorting: click a column header, or cycle with the `s` key ──────
     @on(DataTable.HeaderSelected, "#scopes-table")
@@ -160,12 +182,14 @@ class ScopesPane(Vertical):
         self._set_sort(event.column_index)
 
     def cycle_sort(self) -> None:
-        """Keyboard sort: flip direction, then advance to the next column."""
-        if not self._sort_rev:
-            self._sort_rev = True
-        else:
-            self._sort_rev = False
-            self._sort_col = (self._sort_col + 1) % 2
+        """Keyboard sort: advance to the next column, ascending."""
+        self._sort_col = (self._sort_col + 1) % 2
+        self._sort_rev = False
+        self._rebuild(focus=False, keep=self._cursor_scope())
+
+    def flip_sort(self) -> None:
+        """Reverse the current sort direction."""
+        self._sort_rev = not self._sort_rev
         self._rebuild(focus=False, keep=self._cursor_scope())
 
     def _set_sort(self, col: int) -> None:
@@ -199,19 +223,27 @@ class SecretsPane(Vertical):
         self._secrets: list[Secret] = []
         self._visible: list[Secret] = []
         self._filter = ""
+        self._keyvault = False
         self._sort_col = 0  # column index: 0=Key, 1=Updated, 2=Age
         self._sort_rev = False
 
     def compose(self) -> ComposeResult:
+        yield Static("", id="secrets-filter", classes="filter-chip")
         table: DataTable = DataTable(id="secrets-table", zebra_stripes=False)
         table.cursor_type = "row"
         yield table
         yield Static("", id="secrets-empty", classes="empty-hint")
 
-    def show(self, scope: str, secrets: list[Secret]) -> None:
+    @property
+    def filter_text(self) -> str:
+        return self._filter
+
+    def show(self, scope: str, secrets: list[Secret], *, keyvault: bool = False) -> None:
+        if scope != self._scope:  # a refresh keeps the filter; a new scope clears it
+            self._filter = ""
         self._scope = scope
         self._secrets = secrets
-        self._filter = ""
+        self._keyvault = keyvault
         self._rebuild()
 
     def apply_filter(self, text: str) -> None:
@@ -219,6 +251,8 @@ class SecretsPane(Vertical):
         self._rebuild()
 
     def _rebuild(self, *, keep: str | None = None) -> None:
+        chip = self.query_one("#secrets-filter", Static)
+        chip.display = bool(self._filter)
         table = self.query_one(DataTable)
         table.clear(columns=True)
         arrow = "↓" if self._sort_rev else "↑"
@@ -231,6 +265,8 @@ class SecretsPane(Vertical):
         self._visible = self._sorted(
             [s for s in self._secrets if fuzzy_match(self._filter, s.key)]
         )
+        if self._filter:
+            chip.update(filter_chip(self._filter, len(self._visible), len(self._secrets)))
         for s in self._visible:
             age, _ = relative_age(s.last_updated_ms)
             table.add_row(
@@ -245,6 +281,11 @@ class SecretsPane(Vertical):
         if not self._visible and self._scope:
             if self._filter:
                 hint.update(f"[$text-muted]No secret matches\n“{self._filter}”.[/]")
+            elif self._keyvault:
+                hint.update(
+                    f"[$text-muted]“{self._scope}” is empty.\n"
+                    "Key Vault-backed — add secrets in Azure.[/]"
+                )
             else:
                 hint.update(
                     f"[$text-muted]“{self._scope}” is empty.\n"
@@ -265,8 +306,10 @@ class SecretsPane(Vertical):
 
     @on(DataTable.RowHighlighted, "#secrets-table")
     def _highlighted(self, event: DataTable.RowHighlighted) -> None:
-        if event.row_key is not None and event.row_key.value:
-            self.post_message(self.Selected(event.row_key.value))
+        # see ScopesPane._highlighted: ignore stale rebuild-time highlights
+        key = event.row_key.value if event.row_key is not None else None
+        if key is not None and key == self._cursor_key():
+            self.post_message(self.Selected(key))
 
     # ── sorting: click a column header, or cycle with the `s` key ──────
     @on(DataTable.HeaderSelected, "#secrets-table")
@@ -274,12 +317,14 @@ class SecretsPane(Vertical):
         self._set_sort(event.column_index)
 
     def cycle_sort(self) -> None:
-        """Keyboard sort: flip direction, then advance to the next column."""
-        if not self._sort_rev:
-            self._sort_rev = True
-        else:
-            self._sort_rev = False
-            self._sort_col = (self._sort_col + 1) % 3
+        """Keyboard sort: advance to the next column, ascending."""
+        self._sort_col = (self._sort_col + 1) % 3
+        self._sort_rev = False
+        self._rebuild(keep=self._cursor_key())
+
+    def flip_sort(self) -> None:
+        """Reverse the current sort direction."""
+        self._sort_rev = not self._sort_rev
         self._rebuild(keep=self._cursor_key())
 
     def _set_sort(self, col: int) -> None:
@@ -312,11 +357,15 @@ class DetailPane(Vertical):
         self._sort_rev = True  # Access, highest privilege first
 
     def compose(self) -> ComposeResult:
-        with VerticalScroll(id="detail-scroll", can_focus=False):
+        # the scroll container is the pane's focus target, so a long revealed
+        # value stays reachable by keyboard; the ACL table inside is passive
+        # (header clicks still sort it — `s`/`S` sort it from the keyboard).
+        with VerticalScroll(id="detail-scroll", can_focus=True):
             yield Static("", id="detail-head")
             yield Static("", id="detail-perms")
             table: DataTable = DataTable(id="acl-table", zebra_stripes=False)
-            table.cursor_type = "row"
+            table.cursor_type = "none"
+            table.can_focus = False
             yield table
             yield Static("", id="detail-foot")
             yield Static("", id="detail-value", classes="secret-value")
@@ -440,12 +489,14 @@ class DetailPane(Vertical):
         )
 
     def cycle_sort(self) -> None:
-        """Keyboard sort: flip direction, then advance to the next column."""
-        if not self._sort_rev:
-            self._sort_rev = True
-        else:
-            self._sort_rev = False
-            self._sort_col = (self._sort_col + 1) % 2
+        """Keyboard sort: advance to the next column, ascending."""
+        self._sort_col = (self._sort_col + 1) % 2
+        self._sort_rev = False
+        self._populate_acls()
+
+    def flip_sort(self) -> None:
+        """Reverse the current sort direction."""
+        self._sort_rev = not self._sort_rev
         self._populate_acls()
 
     @on(DataTable.HeaderSelected, "#acl-table")
