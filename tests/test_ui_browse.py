@@ -246,6 +246,110 @@ async def test_delete_from_detail_pane_targets_the_secret():
         await pilot.press("escape")
 
 
+async def test_global_search_jumps_to_the_secret():
+    app, _ = _app_with_session()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        main = cast(MainScreen, app.screen)
+        await pilot.press("ctrl+f")  # search everywhere (current scope is kv)
+        await pilot.pause()
+        await pilot.press(*"dbpass")  # fuzzy: prod/db-password
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        assert main.current_scope == "prod"
+        assert main.current_secret == "db-password"
+        assert getattr(app.focused, "id", None) == "secrets-table"
+
+
+async def test_copy_reference_puts_snippet_on_clipboard():
+    app, _ = _app_with_session()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        await pilot.press("tab")  # secrets pane: kv/tenant-id selected
+        await pilot.pause()
+        await pilot.press("C")  # snippet picker, first row = dbutils
+        await pilot.pause()
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.clipboard == 'dbutils.secrets.get(scope="kv", key="tenant-id")'
+
+
+async def test_revealed_value_auto_hides():
+    app, _ = _app_with_session()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        main = cast(MainScreen, app.screen)
+        main.REVEAL_TIMEOUT = 0.2
+        await pilot.press("j", "tab")  # prod / api-key
+        await pilot.pause()
+        await pilot.press("space")
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert main._hide_timer is not None  # the auto-hide is armed
+        await pilot.pause(0.6)  # ...and it fires
+        assert main._revealed is None
+
+
+async def test_undo_restores_a_deleted_secret():
+    app, session = _app_with_session()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        original = session.reveal("prod", "api-key")
+        await pilot.press("j", "tab")  # prod / api-key
+        await pilot.pause()
+        await pilot.press("d", "y")  # delete + confirm
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert "api-key" not in [s.key for s in session.secrets_for("prod")]
+        await pilot.press("u")  # undo
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert "api-key" in [s.key for s in session.secrets_for("prod")]
+        assert session.reveal("prod", "api-key") == original
+
+
+async def test_read_only_mode_blocks_mutations():
+    session = WorkspaceService(seeded_store(), "test")
+    app = IsolinearApp(onboarding=stub_onboarding(), session=session, read_only=True)
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        await pilot.press("j")  # prod (Databricks-backed, normally writable)
+        await pilot.pause()
+        await pilot.press("n")  # blocked
+        await pilot.pause()
+        assert isinstance(app.screen, MainScreen)
+        await pilot.press("tab")
+        await pilot.pause()
+        await pilot.press("d")  # blocked too
+        await pilot.pause()
+        assert isinstance(app.screen, MainScreen)
+        assert len(session.secrets_for("prod")) == 2
+
+
+async def test_forget_values_purges_the_cache():
+    app, session = _app_with_session()
+    async with app.run_test() as pilot:
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        main = cast(MainScreen, app.screen)
+        await pilot.press("j", "tab")
+        await pilot.pause()
+        await pilot.press("space")  # reveal caches the value
+        await app.workers.wait_for_complete()
+        await pilot.pause()
+        assert session.cached_value("prod", "api-key") is not None
+        main.action_forget_values()
+        await pilot.pause()
+        assert session.cached_value("prod", "api-key") is None
+        assert main._revealed is None
+
+
 async def test_double_d_does_not_confirm_delete():
     """`d` opens the confirm dialog; a vim-twitch second `d` must not confirm."""
     app, session = _app_with_session()

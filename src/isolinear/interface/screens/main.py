@@ -17,6 +17,7 @@ from textual.binding import Binding
 from textual.command import DiscoveryHit, Hit, Hits, Provider
 from textual.containers import Horizontal, VerticalScroll
 from textual.screen import Screen
+from textual.timer import Timer
 from textual.widgets import DataTable, Footer, Input, Static
 
 from ...application import OnboardingService, WorkspaceService
@@ -27,7 +28,9 @@ from ..modals import (
     HelpScreen,
     PermissionsScreen,
     ScopeFormModal,
+    SearchModal,
     SecretFormModal,
+    SnippetModal,
 )
 from ..widgets import DetailPane, ScopeRow, ScopesPane, SecretsPane
 from .login import ConnectResult, LoginScreen
@@ -67,6 +70,9 @@ class MainScreen(Screen[None]):
         Binding("p", "permissions", "Perms"),
         Binding("space", "reveal", "Reveal"),
         Binding("c", "copy", "Copy"),
+        Binding("C", "copy_snippet", "Copy ref", show=False),
+        Binding("ctrl+f", "search", "Search", show=False),
+        Binding("u", "undo_delete", "Undo delete", show=False),
         Binding("r", "refresh_scope", "Refresh", show=False),
         Binding("R", "refresh_workspace", "Refresh all", show=False),
         Binding("a", "auth", "Auth", show=False),
@@ -86,16 +92,26 @@ class MainScreen(Screen[None]):
         Binding("G", "jump('bottom')", "Bottom", show=False),
     ]
 
+    # a revealed value hides itself after this many seconds (shoulder-surfing
+    # guard); class-level so tests can shrink it
+    REVEAL_TIMEOUT: float = 30.0
+
     def __init__(
-        self, onboarding: OnboardingService, session: WorkspaceService | None = None
+        self,
+        onboarding: OnboardingService,
+        session: WorkspaceService | None = None,
+        read_only: bool = False,
     ) -> None:
         super().__init__()
         self._onboarding = onboarding
         self.workspaces = onboarding.available_workspaces()
         self.session = session
+        self.read_only = read_only
         self.current_scope: str | None = None
         self.current_secret: str | None = None
         self._revealed: tuple[str, str] | None = None
+        self._hide_timer: Timer | None = None  # pending auto-hide
+        self._undo_secret: tuple[str, str, str] | None = None  # last deleted
         self._status_text: str = ""
         self._filter_target: str | None = None  # "scopes" | "secrets" while filtering
         # scope list shows only scopes the user can access; f toggles to show all
@@ -153,7 +169,8 @@ class MainScreen(Screen[None]):
             widget.update("[$text-muted]Not connected — press w to sign in[/]")
             return
         user = self._sess.identity.user_name or "—"
-        widget.update(f"[$text-muted]{user}  ·  {self._sess.label}[/]")
+        ro = "  ·  [$warning]read-only[/]" if self.read_only else ""
+        widget.update(f"[$text-muted]{user}  ·  {self._sess.label}[/]{ro}")
 
     def _render_breadcrumb(self) -> None:
         bc = self.query_one("#breadcrumb", Static)
@@ -330,12 +347,23 @@ class MainScreen(Screen[None]):
         # scope; the list narrows to the accessible ones once warming completes.
         self.scopes_pane.show(self._scope_rows(show_all=True), reset_filter=True)
 
+        # warm scopes concurrently (bounded, so big workspaces load in seconds
+        # without hammering the API); each scope is written under its own key,
+        # so the cache writes don't race.
         total = len(scopes)
-        for i, scope in enumerate(scopes, 1):
-            await asyncio.to_thread(session.warm_scope, scope.name)
-            self._set_status(f"Loading… {i}/{total}")
-            if scope.name == self.current_scope:
-                self._show_scope(scope.name)
+        gate = asyncio.Semaphore(8)
+        done = 0
+
+        async def warm(scope_name: str) -> None:
+            nonlocal done
+            async with gate:
+                await asyncio.to_thread(session.warm_scope, scope_name)
+            done += 1
+            self._set_status(f"Loading… {done}/{total}")
+            if scope_name == self.current_scope:
+                self._show_scope(scope_name)
+
+        await asyncio.gather(*(warm(s.name) for s in scopes))
 
         # refresh rows now that counts + access are warmed (applies the filter)
         self._render_scopes(keep=self.current_scope, focus=False)
@@ -463,6 +491,12 @@ class MainScreen(Screen[None]):
             return self.detail_pane
         return None
 
+    def _blocked_read_only(self) -> bool:
+        """Guard for mutating actions reached via the command palette."""
+        if self.read_only:
+            self.notify("Read-only mode — changes are disabled.")
+        return self.read_only
+
     def _scope_is_keyvault(self, name: str | None = None) -> bool:
         """Azure Key Vault-backed scopes are read-only through the secrets API."""
         name = name or self.current_scope
@@ -480,7 +514,10 @@ class MainScreen(Screen[None]):
         """Context-aware footer — gate actions on the current *selection*, not the
         focused pane, so the footer stays correct whichever of the three panes has
         focus. In Textual, returning False hides AND disables the binding."""
-        if action in ("reveal", "copy"):
+        mutating = ("new_secret", "new_scope", "edit_secret", "delete", "undo_delete")
+        if self.read_only and action in mutating:
+            return False
+        if action in ("reveal", "copy", "copy_snippet"):
             return self.current_secret is not None
         if action == "edit_secret":
             return self.current_secret is not None and not self._scope_is_keyvault()
@@ -493,13 +530,17 @@ class MainScreen(Screen[None]):
     # ── command palette ─────────────────────────────────────────────────
     def command_catalog(self) -> list[tuple[str, object]]:
         return [
+            ("Search all scopes", self.action_search),
             ("New secret", self.action_new_secret),
             ("New scope", self.action_new_scope),
             ("Edit secret value", self.action_edit_secret),
             ("Delete selected", self.action_delete),
+            ("Undo last secret delete", self.action_undo_delete),
             ("Manage scope permissions", self.action_permissions),
             ("Reveal secret value", self.action_reveal),
             ("Copy secret value", self.action_copy),
+            ("Copy code reference (dbutils / CLI)", self.action_copy_snippet),
+            ("Forget revealed values", self.action_forget_values),
             ("Sort: next column", self.action_sort),
             ("Sort: reverse direction", self.action_sort_reverse),
             ("Refresh scope", self.action_refresh_scope),
@@ -526,13 +567,13 @@ class MainScreen(Screen[None]):
             return
         scope = self.current_scope
         self.app.push_screen(
-            PermissionsScreen(self._sess, scope),
+            PermissionsScreen(self._sess, scope, read_only=self.read_only),
             lambda _: self._show_scope(scope),  # re-render ACLs after editing
         )
 
     # ── create / edit / delete ──────────────────────────────────────────
     def action_new_scope(self) -> None:
-        if self.session:
+        if self.session and not self._blocked_read_only():
             self.app.push_screen(ScopeFormModal(), self._on_new_scope)
 
     def _on_new_scope(self, name: str | None) -> None:
@@ -553,6 +594,8 @@ class MainScreen(Screen[None]):
         if not (self.session and self.current_scope):
             self.notify("Select a scope first.")
             return
+        if self._blocked_read_only():
+            return
         if self._scope_is_keyvault():
             self._notify_keyvault()
             return
@@ -561,6 +604,8 @@ class MainScreen(Screen[None]):
     def action_edit_secret(self) -> None:
         if not (self.session and self.current_scope and self.current_secret):
             self.notify("Select a secret first.")
+            return
+        if self._blocked_read_only():
             return
         if self._scope_is_keyvault():
             self._notify_keyvault()
@@ -590,6 +635,8 @@ class MainScreen(Screen[None]):
     def action_delete(self) -> None:
         """Delete what's selected: the scope from the scopes pane; the secret from
         the secrets/detail panes (falling back to the scope when it has none)."""
+        if self._blocked_read_only():
+            return
         focused_id = getattr(self.focused, "id", None)
         target_secret = focused_id != "scopes-table" and self.current_secret
         if target_secret and self.current_scope and self.current_secret:
@@ -634,6 +681,10 @@ class MainScreen(Screen[None]):
 
     @work(group="mutate")
     async def _delete_secret(self, scope: str, key: str) -> None:
+        try:  # grab the value first so the delete is undoable
+            value: str | None = await asyncio.to_thread(self._sess.reveal, scope, key)
+        except StoreError:
+            value = None
         try:
             await asyncio.to_thread(self._sess.delete_secret, scope, key)
         except StoreError as exc:
@@ -642,7 +693,22 @@ class MainScreen(Screen[None]):
         if scope == self.current_scope:
             self._show_scope(scope)
         self._render_scopes(keep=self.current_scope, focus=False)
-        self.notify(f"Secret “{key}” deleted.")
+        if value is not None:
+            self._undo_secret = (scope, key, value)
+            self.notify(f"Secret “{key}” deleted — press u to undo.")
+        else:
+            self.notify(f"Secret “{key}” deleted.")
+
+    def action_undo_delete(self) -> None:
+        """Restore the most recently deleted secret."""
+        if not (self.session and self._undo_secret) or self._blocked_read_only():
+            return
+        scope, key, value = self._undo_secret
+        self._undo_secret = None
+        if self._sess.scope(scope) is None:
+            self.notify(f"Cannot undo — scope “{scope}” is gone.", severity="error")
+            return
+        self._put_secret(scope, key, value)
 
     @work(group="mutate")
     async def _delete_scope(self, name: str) -> None:
@@ -664,13 +730,27 @@ class MainScreen(Screen[None]):
             return
         target = (self.current_scope, self.current_secret)
         if self._revealed == target:
-            self._revealed = None
-            self._render_secret()
+            self._hide_value()
         elif self._sess.cached_value(*target) is not None:
-            self._revealed = target
-            self._render_secret()
+            self._show_value(target)
         else:
             self._reveal_fetch(target)
+
+    def _show_value(self, target: tuple[str, str]) -> None:
+        self._revealed = target
+        self._render_secret()
+        # shoulder-surfing guard: the value hides itself after a short while
+        if self._hide_timer:
+            self._hide_timer.stop()
+        self._hide_timer = self.set_timer(self.REVEAL_TIMEOUT, self._hide_value)
+
+    def _hide_value(self) -> None:
+        if self._hide_timer:
+            self._hide_timer.stop()
+            self._hide_timer = None
+        if self._revealed:
+            self._revealed = None
+            self._render_secret()
 
     @work(group="reveal")
     async def _reveal_fetch(self, target: tuple[str, str]) -> None:
@@ -681,8 +761,7 @@ class MainScreen(Screen[None]):
             self.notify(f"Cannot read value: {exc}", severity="error")
             return
         if (self.current_scope, self.current_secret) == target:
-            self._revealed = target
-            self._render_secret()
+            self._show_value(target)
 
     def action_copy(self) -> None:
         if not (self.session and self.current_scope and self.current_secret):
@@ -705,6 +784,44 @@ class MainScreen(Screen[None]):
             return
         self.app.copy_to_clipboard(value)
         self.notify(f"Copied “{target[1]}” to clipboard.")
+
+    def action_copy_snippet(self) -> None:
+        """Copy a code reference to the secret (what goes in notebooks/jobs)."""
+        if not (self.session and self.current_scope and self.current_secret):
+            return
+        self.app.push_screen(
+            SnippetModal(self.current_scope, self.current_secret), self._on_snippet
+        )
+
+    def _on_snippet(self, snippet: str | None) -> None:
+        if snippet:
+            self.app.copy_to_clipboard(snippet)
+            self.notify("Reference copied to clipboard.")
+
+    def action_forget_values(self) -> None:
+        """Purge every cached secret value (and any pending undo) from memory."""
+        if self.session is None:
+            return
+        self._sess.forget_values()
+        self._undo_secret = None
+        self._hide_value()
+        self.notify("Forgot all revealed values.")
+
+    # ── global search ───────────────────────────────────────────────────
+    def action_search(self) -> None:
+        if self.session is None:
+            return
+        entries = [(s.scope, s.key) for s in self._sess.all_secrets()]
+        self.app.push_screen(SearchModal(entries), self._on_search)
+
+    def _on_search(self, result: tuple[str, str] | None) -> None:
+        if not result:
+            return
+        scope, key = result
+        self._show_scope(scope)
+        self.scopes_pane.select(scope)
+        self.secrets_pane.select(key)
+        self.secrets_pane.focus_table()
 
     # ── refresh (US-15) ─────────────────────────────────────────────────
     def action_refresh_scope(self) -> None:

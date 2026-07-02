@@ -278,6 +278,11 @@ ModalScreen {
     max-height: 16;
     margin-top: 1;
 }
+#search-results, #snippet-table {
+    height: auto;
+    max-height: 16;
+    margin-top: 1;
+}
 #acl-table {
     height: auto;
     max-height: 14;

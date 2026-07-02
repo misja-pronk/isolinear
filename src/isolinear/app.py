@@ -31,10 +31,12 @@ class IsolinearApp(App[None]):
         self,
         onboarding: OnboardingService | None = None,
         session: WorkspaceService | None = None,
+        read_only: bool = False,
     ) -> None:
         super().__init__()
         self._onboarding = onboarding
         self._initial_session = session
+        self.read_only = read_only
 
     def get_theme_variable_defaults(self) -> dict[str, str]:
         # The stylesheet is parsed under Textual's default theme before ours is
@@ -57,13 +59,18 @@ class IsolinearApp(App[None]):
             DatabricksCfgProfileStore(),
             DatabricksBundleStore(),
         )
-        self.push_screen(MainScreen(onboarding, self._initial_session))
+        self.push_screen(
+            MainScreen(onboarding, self._initial_session, read_only=self.read_only)
+        )
 
 
 _USAGE = """\
 isolinear — a keyboard-driven terminal UI for managing Databricks secrets.
 
-usage: isolinear [--version] [--help]
+usage: isolinear [--read-only] [--version] [--help]
+
+  --read-only   browse, reveal, and copy — but disable every mutation
+                (safe for poking around production)
 
 Run with no arguments to launch the TUI. Inside: ? for help, ctrl+p for the
 command palette, q to quit.
@@ -82,7 +89,7 @@ def main() -> None:
     if {"-h", "--help"} & set(args):
         print(_USAGE, end="")
         return
-    IsolinearApp().run()
+    IsolinearApp(read_only="--read-only" in args).run()
 
 
 if __name__ == "__main__":

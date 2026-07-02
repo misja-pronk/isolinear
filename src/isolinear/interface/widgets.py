@@ -167,6 +167,15 @@ class ScopesPane(Vertical):
     def focus_table(self) -> None:
         self.query_one(DataTable).focus()
 
+    def select(self, name: str) -> None:
+        """Move the cursor to `name`, dropping a filter that would hide it."""
+        if self._filter and all(r.name != name for r in self._visible):
+            self.apply_filter("")
+        for i, r in enumerate(self._visible):
+            if r.name == name:
+                self.query_one(DataTable).move_cursor(row=i)
+                return
+
     @on(DataTable.RowHighlighted, "#scopes-table")
     def _highlighted(self, event: DataTable.RowHighlighted) -> None:
         # a rebuild queues a highlight for row 0 before move_cursor restores the
@@ -303,6 +312,15 @@ class SecretsPane(Vertical):
 
     def focus_table(self) -> None:
         self.query_one(DataTable).focus()
+
+    def select(self, key: str) -> None:
+        """Move the cursor to `key`, dropping a filter that would hide it."""
+        if self._filter and all(s.key != key for s in self._visible):
+            self.apply_filter("")
+        for i, s in enumerate(self._visible):
+            if s.key == key:
+                self.query_one(DataTable).move_cursor(row=i)
+                return
 
     @on(DataTable.RowHighlighted, "#secrets-table")
     def _highlighted(self, event: DataTable.RowHighlighted) -> None:
@@ -445,7 +463,7 @@ class DetailPane(Vertical):
         if value is not None:
             self._foot(
                 "[$text-muted]Value[/]        [$value-color]revealed[/]\n"
-                "[dim]space to hide · c to copy[/]"
+                "[dim]space to hide · c to copy · hides itself in 30s[/]"
             )
             self.show_value(value)
         else:

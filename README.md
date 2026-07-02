@@ -88,15 +88,22 @@ for the fuzzy command palette.
 | `↑↓` / `j` `k` | Move within a pane |
 | `←→` / `h` `l` · `tab` | Move between panes |
 | `g` / `G` | Jump to top / bottom |
-| `/` | Filter the focused pane |
+| `/` | Filter the focused pane (`↑↓` move while typing, `esc` clears) |
+| `ctrl+f` | Search every scope |
+| `s` / `S` | Sort: next column / reverse |
 | `n` / `N` | New secret / new scope |
 | `e` · `d` | Edit secret · delete (with confirm) |
+| `u` | Undo the last secret delete |
 | `p` | Manage scope permissions (ACLs) |
-| `space` · `c` | Reveal / hide value · copy value |
+| `space` / `enter` | Reveal / hide value (auto-hides in 30s) |
+| `c` / `C` | Copy value / copy a code reference (dbutils, Spark conf, CLI) |
 | `r` / `R` | Refresh scope / workspace |
 | `a` | Authorization overview |
 | `w` · `ctrl+p` | Switch workspace · command palette |
 | `?` · `q` | Help · quit |
+
+Run `isolinear --read-only` to browse and reveal with every mutation disabled —
+handy when you're just poking around production.
 
 ## Security
 

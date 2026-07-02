@@ -16,7 +16,7 @@ from textual.widgets import Button, DataTable, Input, Select, Static
 
 from ..application import WorkspaceService
 from ..domain import Acl, AuthSummary, Identity, StoreError, perm_rank
-from .widgets import perm_cell
+from .widgets import fuzzy_match, perm_cell
 
 PERMISSIONS = ["READ", "WRITE", "MANAGE"]
 
@@ -151,6 +151,124 @@ class ScopeFormModal(ModalScreen[str | None]):
         self.dismiss(None)
 
 
+class SearchModal(ModalScreen[tuple[str, str] | None]):
+    """Global search: fuzzy-match `scope/key` across the whole workspace.
+
+    Everything is already warmed into the read model, so matching is local and
+    instant. Dismisses with the chosen (scope, key) for the browser to jump to.
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+        Binding("down", "move(1)", "Down", show=False),
+        Binding("up", "move(-1)", "Up", show=False),
+    ]
+
+    def __init__(self, entries: list[tuple[str, str]]) -> None:
+        super().__init__()
+        self._entries = entries  # (scope, key)
+        self._visible: list[tuple[str, str]] = []
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="dialog"):
+            yield Static("Search all scopes", classes="dialog-title")
+            yield Input(placeholder="scope/key…", id="f-search")
+            table: DataTable = DataTable(id="search-results", zebra_stripes=False)
+            table.cursor_type = "row"
+            table.can_focus = False  # the input keeps focus; ↑↓ drive the table
+            yield table
+            yield Static(
+                "[$text-muted]↑↓ move · enter open · esc close[/]",
+                classes="dialog-hint",
+            )
+
+    def on_mount(self) -> None:
+        self._populate("")
+        self.query_one(Input).focus()
+
+    def _populate(self, query: str) -> None:
+        table = self.query_one(DataTable)
+        table.clear(columns=True)
+        table.add_columns("Scope", "Key")
+        scope_color = self.app.theme_variables.get("scopes-color", "")
+        self._visible = [e for e in self._entries if fuzzy_match(query, f"{e[0]}/{e[1]}")]
+        for scope, key in self._visible:
+            table.add_row(Text(scope, style=scope_color), key)
+        table.display = bool(self._visible)
+
+    @on(Input.Changed, "#f-search")
+    def _changed(self, event: Input.Changed) -> None:
+        self._populate(event.value)
+
+    def action_move(self, step: int) -> None:
+        table = self.query_one(DataTable)
+        if step > 0:
+            table.action_cursor_down()
+        else:
+            table.action_cursor_up()
+
+    @on(Input.Submitted, "#f-search")
+    def _open(self) -> None:
+        row = self.query_one(DataTable).cursor_row
+        if 0 <= row < len(self._visible):
+            self.dismiss(self._visible[row])
+
+    @on(DataTable.RowSelected, "#search-results")
+    def _clicked(self, event: DataTable.RowSelected) -> None:
+        if 0 <= event.cursor_row < len(self._visible):
+            self.dismiss(self._visible[event.cursor_row])
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
+class SnippetModal(ModalScreen[str | None]):
+    """Pick a code reference to a secret; returns the snippet to copy."""
+
+    BINDINGS = [
+        Binding("escape,q", "cancel", "Cancel"),
+        Binding("j", "move(1)", "Down", show=False),
+        Binding("k", "move(-1)", "Up", show=False),
+    ]
+
+    def __init__(self, scope: str, key: str) -> None:
+        super().__init__()
+        self._options: list[tuple[str, str]] = [
+            ("Python (dbutils)", f'dbutils.secrets.get(scope="{scope}", key="{key}")'),
+            ("Spark conf / job", f"{{{{secrets/{scope}/{key}}}}}"),
+            ("Databricks CLI", f"databricks secrets get-secret {scope} {key}"),
+        ]
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="dialog"):
+            yield Static("Copy reference", classes="dialog-title")
+            table: DataTable = DataTable(id="snippet-table", zebra_stripes=False)
+            table.cursor_type = "row"
+            yield table
+            yield Static("[$text-muted]enter copy · esc close[/]", classes="dialog-hint")
+
+    def on_mount(self) -> None:
+        table = self.query_one(DataTable)
+        table.add_columns("Format", "Snippet")
+        for label, snippet in self._options:
+            table.add_row(Text(label, style="bold"), Text(snippet))
+        table.focus()
+
+    def action_move(self, step: int) -> None:
+        table = self.query_one(DataTable)
+        if step > 0:
+            table.action_cursor_down()
+        else:
+            table.action_cursor_up()
+
+    @on(DataTable.RowSelected, "#snippet-table")
+    def _picked(self, event: DataTable.RowSelected) -> None:
+        self.dismiss(self._options[event.cursor_row][1])
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
 class HelpScreen(ModalScreen[None]):
     BINDINGS = [Binding("escape,q,?", "close", "Close")]
 
@@ -161,6 +279,7 @@ class HelpScreen(ModalScreen[None]):
         ("g / G", "Jump to top / bottom"),
         ("enter", "Scopes: open · Secrets: reveal"),
         ("/", "Filter the focused pane (↑↓ move while typing)"),
+        ("ctrl+f", "Search every scope"),
         ("esc", "Clear the filter"),
         ("f", "Scopes: only mine / all"),
         ("s / S", "Sort: next column / reverse"),
@@ -168,9 +287,10 @@ class HelpScreen(ModalScreen[None]):
         ("n / N", "New secret / new scope"),
         ("e", "Edit secret value"),
         ("d", "Delete secret/scope (confirm)"),
+        ("u", "Undo the last secret delete"),
         ("p", "Manage scope permissions (ACLs)"),
-        ("space", "Reveal / hide value"),
-        ("c", "Copy value to clipboard"),
+        ("space", "Reveal / hide value (auto-hides in 30s)"),
+        ("c / C", "Copy value / copy code reference"),
         ("", ""),
         ("r / R", "Refresh scope / workspace"),
         ("a", "Authorization overview"),
@@ -346,10 +466,13 @@ class PermissionsScreen(ModalScreen[None]):
         Binding("S", "sort_reverse", "Sort reverse", show=False),
     ]
 
-    def __init__(self, session: WorkspaceService, scope: str) -> None:
+    def __init__(
+        self, session: WorkspaceService, scope: str, read_only: bool = False
+    ) -> None:
         super().__init__()
         self._session = session
         self._scope = scope
+        self._read_only = read_only
         self._principals: list[str] = []
         self._sort_col = 1  # 0=Principal, 1=Access
         self._sort_rev = True  # highest access first
@@ -362,10 +485,15 @@ class PermissionsScreen(ModalScreen[None]):
             table: DataTable = DataTable(id="acl-table", zebra_stripes=False)
             table.cursor_type = "row"
             yield table
-            yield Static(
-                "[$text-muted]a add · e change · d remove · s/S sort · esc close[/]",
-                classes="dialog-hint",
+            hint = (
+                "[$warning]read-only[/][$text-muted] · s/S sort · esc close[/]"
+                if self._read_only
+                else "[$text-muted]a add · e change · d remove · s/S sort · esc close[/]"
             )
+            yield Static(hint, classes="dialog-hint")
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        return not (self._read_only and action in ("add", "edit", "remove"))
 
     def on_mount(self) -> None:
         self._populate()
