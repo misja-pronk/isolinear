@@ -283,7 +283,7 @@ ModalScreen {
     max-height: 16;
     margin-top: 1;
 }
-#search-results, #snippet-table, #audit-table {
+#search-results, #snippet-table, #audit-table, #principal-results {
     height: auto;
     max-height: 16;
     margin-top: 1;

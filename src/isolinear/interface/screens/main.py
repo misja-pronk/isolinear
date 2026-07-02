@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 from functools import partial
+from pathlib import Path
 
 from rich.markup import escape
 from textual import events, on, work
@@ -21,14 +22,22 @@ from textual.screen import Screen
 from textual.timer import Timer
 from textual.widgets import DataTable, Footer, Input, Static
 
-from ...application import OnboardingService, WorkspaceService
+from ...application import (
+    OnboardingService,
+    WorkspaceService,
+    format_dotenv,
+    parse_dotenv,
+)
 from ...domain import AuthError, Settings, StoreError
 from ..modals import (
     AuditScreen,
     AuthScreen,
     ConfirmModal,
     HelpScreen,
+    MoveSecretModal,
+    PathModal,
     PermissionsScreen,
+    PrincipalModal,
     ScopeFormModal,
     SearchModal,
     SecretFormModal,
@@ -68,6 +77,7 @@ class MainScreen(Screen[None]):
         Binding("n", "new_secret", "New"),
         Binding("N", "new_scope", "New scope", show=False),
         Binding("e", "edit_secret", "Edit"),
+        Binding("m", "move_secret", "Move/copy", show=False),
         Binding("d", "delete", "Delete"),
         Binding("p", "permissions", "Perms"),
         Binding("space", "reveal", "Reveal"),
@@ -548,10 +558,20 @@ class MainScreen(Screen[None]):
         """Context-aware footer — gate actions on the current *selection*, not the
         focused pane, so the footer stays correct whichever of the three panes has
         focus. In Textual, returning False hides AND disables the binding."""
-        mutating = ("new_secret", "new_scope", "edit_secret", "delete", "undo_delete")
+        mutating = (
+            "new_secret",
+            "new_scope",
+            "edit_secret",
+            "move_secret",
+            "delete",
+            "undo_delete",
+            "import_env",
+        )
         if self.read_only and action in mutating:
             return False
         if action in ("reveal", "copy", "copy_snippet"):
+            return self.current_secret is not None
+        if action == "move_secret":
             return self.current_secret is not None
         if action == "edit_secret":
             return self.current_secret is not None and not self._scope_is_keyvault()
@@ -568,9 +588,14 @@ class MainScreen(Screen[None]):
             ("New secret", self.action_new_secret),
             ("New scope", self.action_new_scope),
             ("Edit secret value", self.action_edit_secret),
+            ("Move / copy secret", self.action_move_secret),
             ("Delete selected", self.action_delete),
             ("Undo last secret delete", self.action_undo_delete),
             ("Manage scope permissions", self.action_permissions),
+            ("Who has access (principal lookup)", self.action_principal_lookup),
+            ("Import .env file into scope", self.action_import_env),
+            ("Copy scope as .env (keys only)", self.action_export_env_keys),
+            ("Copy scope as .env (with values)", self.action_export_env_values),
             ("Reveal secret value", self.action_reveal),
             ("Copy secret value", self.action_copy),
             ("Copy code reference (dbutils / CLI)", self.action_copy_snippet),
@@ -666,6 +691,55 @@ class MainScreen(Screen[None]):
             self._show_scope(scope)
         self._render_scopes(keep=self.current_scope, focus=False)
         self.notify(f"Secret “{key}” saved.")
+
+    def action_move_secret(self) -> None:
+        """Move, rename, duplicate, or copy the selected secret."""
+        if not (self.session and self.current_scope and self.current_secret):
+            self.notify("Select a secret first.")
+            return
+        if self._blocked_read_only():
+            return
+        targets = [s.name for s in self._sess.scopes if not s.is_keyvault]
+        if not targets:
+            self.notify("No writable scope to copy into.")
+            return
+        self.app.push_screen(
+            MoveSecretModal(
+                targets,
+                self.current_scope,
+                self.current_secret,
+                source_locked=self._scope_is_keyvault(),
+            ),
+            partial(self._on_move_secret, self.current_scope, self.current_secret),
+        )
+
+    def _on_move_secret(
+        self, scope: str, key: str, result: tuple[str, str, bool] | None
+    ) -> None:
+        if result:
+            to_scope, to_key, keep = result
+            self._move_secret(scope, key, to_scope, to_key, keep)
+
+    @work(group="mutate")
+    async def _move_secret(
+        self, scope: str, key: str, to_scope: str, to_key: str, keep: bool
+    ) -> None:
+        try:
+            value = await asyncio.to_thread(self._sess.reveal, scope, key)
+            await asyncio.to_thread(self._sess.put_secret, to_scope, to_key, value)
+            if not keep:
+                await asyncio.to_thread(self._sess.delete_secret, scope, key)
+        except StoreError as exc:
+            self.notify(f"Move failed: {exc}", severity="error")
+            return
+        if not keep:
+            self._undo_secret = (scope, key, value)
+        if self.current_scope in (scope, to_scope):
+            self._show_scope(self.current_scope)
+            self.secrets_pane.select(to_key if self.current_scope == to_scope else key)
+        self._render_scopes(keep=self.current_scope, focus=False)
+        verb = "Copied" if keep else "Moved"
+        self.notify(f"{verb} “{key}” → {to_scope}/{to_key}.")
 
     def action_delete(self) -> None:
         """Delete what's selected: the scope from the scopes pane; the secret from
@@ -842,7 +916,128 @@ class MainScreen(Screen[None]):
         self._hide_value()
         self.notify("Forgot all revealed values.")
 
-    # ── global search + audit ───────────────────────────────────────────
+    # ── .env import / export ────────────────────────────────────────────
+    def action_import_env(self) -> None:
+        """Bulk-load KEY=VALUE pairs from a .env file into the selected scope."""
+        if not (self.session and self.current_scope):
+            self.notify("Select a scope first.")
+            return
+        if self._blocked_read_only():
+            return
+        if self._scope_is_keyvault():
+            self._notify_keyvault()
+            return
+        self.app.push_screen(
+            PathModal("Import .env", "path to a .env file (~/project/.env)"),
+            self._on_import_path,
+        )
+
+    def _on_import_path(self, path_str: str | None) -> None:
+        if not (path_str and self.current_scope):
+            return
+        try:
+            text = Path(path_str).expanduser().read_text()
+        except OSError as exc:
+            self.notify(f"Cannot read file: {exc}", severity="error")
+            return
+        entries = parse_dotenv(text)
+        if not entries:
+            self.notify("No KEY=VALUE entries found in that file.")
+            return
+        scope = self.current_scope
+        existing = {s.key for s in self._sess.secrets_for(scope)}
+        overwrite = len(entries.keys() & existing)
+        count = len(entries)
+        plural = "s" if count != 1 else ""
+        message = f"Import [b]{count}[/] secret{plural} into [b]{scope}[/]."
+        if overwrite:
+            message += (
+                f"\n[$warning]{overwrite} existing "
+                f"key{'s' if overwrite != 1 else ''} will be overwritten.[/]"
+            )
+        self.app.push_screen(
+            ConfirmModal(
+                "Import .env", message, danger=bool(overwrite), ok_label="Import"
+            ),
+            partial(self._import_env_if, scope, entries),
+        )
+
+    def _import_env_if(
+        self, scope: str, entries: dict[str, str], confirmed: bool | None
+    ) -> None:
+        if confirmed:
+            self._import_env(scope, entries)
+
+    @work(group="mutate")
+    async def _import_env(self, scope: str, entries: dict[str, str]) -> None:
+        done = 0
+        try:
+            for key, value in entries.items():
+                await asyncio.to_thread(self._sess.put_secret, scope, key, value)
+                done += 1
+        except StoreError as exc:
+            self.notify(
+                f"Import stopped after {done}/{len(entries)}: {exc}", severity="error"
+            )
+        else:
+            self.notify(f"Imported {done} secrets into “{scope}”.")
+        if scope == self.current_scope:
+            self._show_scope(scope)
+        self._render_scopes(keep=self.current_scope, focus=False)
+
+    def action_export_env_keys(self) -> None:
+        """Copy the scope's keys as a .env template (no values)."""
+        if not (self.session and self.current_scope):
+            self.notify("Select a scope first.")
+            return
+        secrets = self._sess.secrets_for(self.current_scope)
+        if not secrets:
+            self.notify("The scope has no secrets.")
+            return
+        self.app.copy_to_clipboard(
+            format_dotenv([(s.key, "") for s in secrets], redact=True)
+        )
+        self.notify(f"Copied {len(secrets)} keys as a .env template.")
+
+    def action_export_env_values(self) -> None:
+        """Copy the scope as .env WITH values — clipboard only, behind a confirm."""
+        if not (self.session and self.current_scope):
+            self.notify("Select a scope first.")
+            return
+        scope = self.current_scope
+        count = len(self._sess.secrets_for(scope))
+        if not count:
+            self.notify("The scope has no secrets.")
+            return
+        self.app.push_screen(
+            ConfirmModal(
+                "Export values",
+                f"Copy all [b]{count}[/] values in [b]{scope}[/] to the clipboard.\n"
+                "[$text-muted]Nothing touches disk, but the clipboard is readable "
+                "by other apps.[/]",
+                ok_label="Copy",
+            ),
+            partial(self._export_values_if, scope),
+        )
+
+    def _export_values_if(self, scope: str, confirmed: bool | None) -> None:
+        if confirmed:
+            self._export_values(scope)
+
+    @work(group="reveal")
+    async def _export_values(self, scope: str) -> None:
+        pairs: list[tuple[str, str]] = []
+        for s in self._sess.secrets_for(scope):
+            try:
+                value = await asyncio.to_thread(self._sess.reveal, scope, s.key)
+            except StoreError as exc:
+                self.notify(f"Cannot read “{s.key}”: {exc}", severity="error")
+                return
+            pairs.append((s.key, value))
+        self.app.copy_to_clipboard(format_dotenv(pairs))
+        self.notify(f"Copied {len(pairs)} entries with values (clipboard only).")
+
+    # ── global search + audit + principal lookup ───────────────────────
     def action_search(self) -> None:
         if self.session is None:
             return
@@ -863,6 +1058,23 @@ class MainScreen(Screen[None]):
             self._settings.audit_threshold = screen.threshold
             self._save_settings()
         self._on_search(result)
+
+    def action_principal_lookup(self) -> None:
+        """Who has access to what — search principals across every scope's ACLs."""
+        if self.session is None:
+            return
+        entries = [
+            (acl.principal, scope, acl.permission)
+            for scope, acl in self._sess.acl_entries()
+        ]
+        self.app.push_screen(PrincipalModal(entries), self._on_principal)
+
+    def _on_principal(self, scope: str | None) -> None:
+        if not scope:
+            return
+        self._show_scope(scope)
+        self.scopes_pane.select(scope)
+        self.scopes_pane.focus_table()
 
     def _on_search(self, result: tuple[str, str] | None) -> None:
         if not result:

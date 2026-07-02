@@ -108,6 +108,14 @@ class WorkspaceService:
             s for scope in self.cache.scopes for s in self.cache.secrets_for(scope.name)
         ]
 
+    def acl_entries(self) -> list[tuple[str, Acl]]:
+        """Every (scope, acl) pair in the workspace (the principal-lookup view)."""
+        return [
+            (scope.name, a)
+            for scope in self.cache.scopes
+            for a in self.cache.acls_for(scope.name)
+        ]
+
     def cached_value(self, scope: str, key: str) -> str | None:
         return self.cache.cached_value(scope, key)
 

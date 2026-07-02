@@ -13,7 +13,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
-from textual.widgets import Button, DataTable, Input, Select, Static
+from textual.widgets import Button, Checkbox, DataTable, Input, Select, Static
 
 from ..application import WorkspaceService
 from ..domain import (
@@ -62,9 +62,11 @@ class ConfirmModal(ModalScreen[bool]):
             yield Static(self._message)
             with Horizontal(classes="buttons"):
                 yield Button(key_label("Cancel"), id="cancel", variant="default")
-                # danger labels get no access-key underline: only `y` confirms
+                # no access-key underline on the ok button: only `y` (or `o`
+                # for the literal OK label) confirms — never the action's letter
+                is_ok = self._ok_label == "OK"
                 yield Button(
-                    self._ok_label if self._danger else key_label(self._ok_label),
+                    key_label(self._ok_label) if is_ok else self._ok_label,
                     id="ok",
                     variant="error" if self._danger else "primary",
                 )
@@ -180,6 +182,190 @@ class ScopeFormModal(ModalScreen[str | None]):
         name = self.query_one("#f-scope", Input).value.strip()
         if name:
             self.dismiss(name)
+
+    @on(Button.Pressed, "#cancel")
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
+class PathModal(ModalScreen[str | None]):
+    """Ask for a file path (e.g. the .env file to import)."""
+
+    BINDINGS = [Binding("escape", "cancel", "Cancel")]
+
+    def __init__(self, title: str, placeholder: str) -> None:
+        super().__init__()
+        self._title = title
+        self._placeholder = placeholder
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="dialog"):
+            yield Static(self._title, classes="dialog-title")
+            yield Input(placeholder=self._placeholder, id="f-path")
+            with Horizontal(classes="buttons"):
+                yield Button("Cancel", id="cancel")
+                yield Button("Open", id="ok", variant="primary")
+
+    def on_mount(self) -> None:
+        self.query_one("#f-path", Input).focus()
+
+    @on(Button.Pressed, "#ok")
+    @on(Input.Submitted)
+    def _ok(self) -> None:
+        path = self.query_one("#f-path", Input).value.strip()
+        if path:
+            self.dismiss(path)
+
+    @on(Button.Pressed, "#cancel")
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
+class PrincipalModal(ModalScreen[str | None]):
+    """Who has access to what: fuzzy-search principals across every scope's ACLs.
+
+    Dismisses with the selected row's scope so the browser can jump to it.
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+        Binding("down", "move(1)", "Down", show=False),
+        Binding("up", "move(-1)", "Up", show=False),
+    ]
+
+    def __init__(self, entries: list[tuple[str, str, str]]) -> None:
+        super().__init__()
+        # (principal, scope, permission), presented principal-first
+        self._entries = sorted(
+            entries,
+            key=lambda e: (e[0].lower(), -perm_rank(e[2]), e[1].lower()),
+        )
+        self._visible: list[tuple[str, str, str]] = []
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="dialog"):
+            yield Static("Who has access", classes="dialog-title")
+            yield Input(
+                placeholder="principal (user, group, service principal)…", id="f-who"
+            )
+            table: DataTable = DataTable(id="principal-results", zebra_stripes=False)
+            table.cursor_type = "row"
+            table.can_focus = False  # the input keeps focus; ↑↓ drive the table
+            yield table
+            yield Static(
+                "[$text-muted]↑↓ move · enter open scope · esc close[/]",
+                classes="dialog-hint",
+            )
+
+    def on_mount(self) -> None:
+        self._populate("")
+        self.query_one(Input).focus()
+
+    def _populate(self, query: str) -> None:
+        table = self.query_one(DataTable)
+        table.clear(columns=True)
+        table.add_columns("Principal", "Scope", "Access")
+        scope_color = self.app.theme_variables.get("scopes-color", "")
+        self._visible = [e for e in self._entries if fuzzy_match(query, e[0])]
+        for principal, scope, permission in self._visible:
+            table.add_row(
+                principal,
+                Text(scope, style=scope_color),
+                perm_cell(self.app, permission),
+            )
+        table.display = bool(self._visible)
+
+    @on(Input.Changed, "#f-who")
+    def _changed(self, event: Input.Changed) -> None:
+        self._populate(event.value)
+
+    def action_move(self, step: int) -> None:
+        table = self.query_one(DataTable)
+        if step > 0:
+            table.action_cursor_down()
+        else:
+            table.action_cursor_up()
+
+    @on(Input.Submitted, "#f-who")
+    def _open(self) -> None:
+        row = self.query_one(DataTable).cursor_row
+        if 0 <= row < len(self._visible):
+            self.dismiss(self._visible[row][1])
+
+    @on(DataTable.RowSelected, "#principal-results")
+    def _clicked(self, event: DataTable.RowSelected) -> None:
+        if 0 <= event.cursor_row < len(self._visible):
+            self.dismiss(self._visible[event.cursor_row][1])
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
+class MoveSecretModal(ModalScreen[tuple[str, str, bool] | None]):
+    """Move, rename, duplicate, or copy a secret — one dialog.
+
+    Dismisses with (target scope, target key, keep_original). Key Vault-backed
+    scopes aren't offered as targets (their writes go through Azure), and a
+    Key Vault *source* forces keep-original because its secrets can't be
+    deleted here.
+    """
+
+    BINDINGS = [Binding("escape", "cancel", "Cancel")]
+
+    def __init__(
+        self, targets: list[str], scope: str, key: str, source_locked: bool = False
+    ) -> None:
+        super().__init__()
+        self._targets = targets
+        self._scope = scope
+        self._key = key
+        self._source_locked = source_locked
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="dialog"):
+            yield Static(
+                "Move / copy   "
+                f"[$scopes-color]{escape(self._scope)}[/]"
+                f"[$text-muted]/[/][$secrets-color]{escape(self._key)}[/]",
+                classes="dialog-title",
+            )
+            yield Select(
+                [(name, name) for name in self._targets],
+                value=self._scope if self._scope in self._targets else self._targets[0],
+                id="f-scope",
+                allow_blank=False,
+            )
+            yield Input(value=self._key, placeholder="target key", id="f-key")
+            keep = Checkbox(
+                "Keep the original (copy instead of move)",
+                value=self._source_locked,
+                id="f-keep",
+            )
+            keep.disabled = self._source_locked  # KV source: copy is the only option
+            yield keep
+            yield Static("", id="form-error", classes="form-error")
+            with Horizontal(classes="buttons"):
+                yield Button("Cancel", id="cancel")
+                yield Button("Save", id="ok", variant="primary")
+
+    def on_mount(self) -> None:
+        self.query_one("#f-key", Input).focus()
+
+    @on(Button.Pressed, "#ok")
+    @on(Input.Submitted)
+    def _save(self) -> None:
+        scope = str(self.query_one("#f-scope", Select).value)
+        key = self.query_one("#f-key", Input).value.strip()
+        keep = self.query_one("#f-keep", Checkbox).value
+        error = self.query_one("#form-error", Static)
+        if not key:
+            self.query_one("#f-key", Input).focus()
+            return
+        if scope == self._scope and key == self._key:
+            error.update("[$error]Choose a different key or scope.[/]")
+            error.display = True
+            return
+        self.dismiss((scope, key, keep))
 
     @on(Button.Pressed, "#cancel")
     def action_cancel(self) -> None:
