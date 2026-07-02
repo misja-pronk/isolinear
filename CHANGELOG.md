@@ -6,6 +6,40 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-02
+
+### Added
+
+- **Multiline secret values**: the secret form gained a file field — point it
+  at `~/certs/key.pem` and the file's content becomes the value. The route for
+  PEM keys, certificates, and JSON blobs a single-line input can't take.
+- **Move / copy / rename** (`m`): one dialog covering all three — target scope
+  (Key Vault-backed scopes aren't offered) + key + a "keep the original"
+  checkbox. Moves are undo-able with `u`, like deletes.
+- **Bulk .env import/export**: import every KEY=VALUE pair from a `.env` file
+  into a scope (with an overwrite count in the confirm); export a scope as a
+  keys-only `.env` template, or with values behind a confirm — clipboard only,
+  never disk. Multiline values round-trip via JSON quoting.
+- **Who has access** (palette): fuzzy-search any principal across every
+  scope's ACLs, highest privilege first; enter jumps to the scope.
+- **Direct connect**: `isolinear prod` / `isolinear --profile prod` skips the
+  picker and connects to a discovered workspace by name.
+- **Persisted preferences**: theme, the `f` scope toggle, and the audit
+  threshold survive restarts (`~/.config/isolinear/settings.json`,
+  XDG-aware, corrupt-tolerant).
+
+### Changed
+
+- One shared sort implementation (`SortState`) now drives all seven sortable
+  tables — identical behavior, no more copy-paste drift.
+
+### Internal
+
+- A drift-guard test asserts every browse-screen binding appears in the help.
+- CI gained a docs job (`mkdocs build --strict` + the screenshot pipeline)
+  and visual snapshot tests (pytest-textual-snapshot) with committed
+  baselines for the browse, login, and audit screens.
+
 ## [0.3.0] - 2026-07-02
 
 ### Added
@@ -234,7 +268,8 @@ Initial release.
 - Pre-loads and caches scopes/secrets/ACLs on startup.
 - Three switchable themes (violet, amber Okudagram, phosphor green).
 
-[Unreleased]: https://github.com/misja-pronk/isolinear/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/misja-pronk/isolinear/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/misja-pronk/isolinear/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/misja-pronk/isolinear/compare/v0.2.8...v0.3.0
 [0.2.8]: https://github.com/misja-pronk/isolinear/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/misja-pronk/isolinear/compare/v0.2.6...v0.2.7
